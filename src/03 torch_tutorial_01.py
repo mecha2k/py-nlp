@@ -207,7 +207,90 @@ print(x2)
 print(x3)
 
 x = torch.rand(3, 6)
-x1, x2, x3 = torch.split(x, split_size_or_sections=[1, 1, 1], dim=0)
+x1, x2 = torch.split(x, split_size_or_sections=3, dim=1)
+print(x)
 print(x1)
 print(x2)
-print(x3)
+
+x = torch.ones(7)
+y = x.numpy()
+print(x)
+print(y)  # convert to numpy
+print(x.add_(1))
+print(np.add(y, 1, out=y))
+print(torch.from_numpy(y))  # convert to torch
+
+x = torch.randn(3, 3)
+y = 3 * x
+print(y.requires_grad)
+print(y)
+y.requires_grad_(True)
+print(y.requires_grad)
+print(y)
+z = (y * y).sum()
+print(y * y)
+print(z.grad_fn)
+
+
+x = torch.ones(3, 3, requires_grad=True)
+print(x)
+
+y = x + 5
+print(y)
+
+z = y * y
+print(z)
+
+out = z.mean()
+print(out)
+print(out.grad_fn)
+
+out.backward()
+print(x.grad)
+
+
+x = torch.randn(3, requires_grad=True)
+y = x * 2
+while y.data.norm() < 1000:
+    y = y * 2
+print(y)
+
+v = torch.tensor([0.1, 1.0, 0.0001], dtype=torch.float)
+print(v)
+y.backward(v)
+print(x.grad)
+
+print(x.requires_grad)
+print((x ** 2).requires_grad)
+with torch.no_grad():
+    print((x ** 2).requires_grad)
+
+print(x.requires_grad)
+y = x.detach()
+print(y.requires_grad)
+print(x.eq(y).any())
+
+x = torch.ones(2, 2, requires_grad=True)
+print(x.data)
+print(x.grad)
+print(x.grad_fn)
+
+y = x + 2
+z = y * y
+out = z.sum()
+print(out)
+
+out.backward()
+print(out.grad_fn)
+
+print(x.data)
+print(x.grad)
+print(x.grad_fn)
+
+print(y.data)
+# print(y.grad)
+print(y.grad_fn)
+
+print(z.data)
+# print(z.grad)
+print(z.grad_fn)
