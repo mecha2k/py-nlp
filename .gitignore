@@ -11,8 +11,7 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-examples/data
-agents
+src/data
 
 .DS_Store
 .vscode
