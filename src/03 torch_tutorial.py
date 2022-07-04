@@ -62,3 +62,22 @@ x = x.to(device)
 z = x + y
 print(z)
 
+x = torch.Tensor([0.1])
+print(x)
+print(x.ndim)
+print(x.shape)
+
+x = torch.Tensor([1, 2, 3])
+print(x)
+print(x.ndim)
+print(x.shape)
+
+x = torch.Tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+print(x)
+print(x.ndim)
+print(x.shape)
+
+x = torch.Tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]],[[1, 2, 3], [4, 5, 6], [7, 8, 9]],[[1, 2, 3], [4, 5, 6], [7, 8, 9]]])
+print(x)
+print(x.ndim)
+print(x.shape)
