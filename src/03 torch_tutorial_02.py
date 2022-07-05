@@ -100,3 +100,63 @@ plt.title("weight", fontsize=18)
 plt.imshow(weight[0, 0, :, :].detach().cpu().numpy(), cmap="gray")
 plt.tight_layout()
 plt.savefig("images/mnist_conv")
+
+pool = F.max_pool2d(y, kernel_size=2, stride=2)
+print(pool.shape)
+pool = nn.MaxPool2d(kernel_size=2, stride=2)
+pool = pool(y)
+print(pool.shape)
+pool = pool.detach().numpy()
+print(pool.shape)
+
+plt.figure(figsize=(12, 6))
+plt.subplot(1, 2, 1)
+plt.title("input", fontsize=18)
+plt.imshow(x[0, :, :].detach().cpu().numpy(), cmap="gray")
+plt.subplot(1, 2, 2)
+plt.title("output", fontsize=18)
+plt.imshow(pool[0, :, :], cmap="gray")
+plt.tight_layout()
+plt.savefig("images/mnist_pool")
+
+with torch.no_grad():
+    x = x.view(-1, 28 * 28)
+    x = nn.Linear(784, 10)(x)
+    x = F.softmax(x, dim=1)
+print(x)
+print(np.sum(x.numpy()))
+
+
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, stride=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+        self.layer3 = nn.Sequential(
+            nn.Linear(in_features=32 * 7 * 7, out_features=10, bias=True),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = x.view(x.shape[0], -1)
+        x = self.layer3(x)
+        return x
+
+
+model = Model()
+print(list(model.children()))
+print(list(model.modules()))
+
+# x = torch.tensor(images[0].unsqueeze(dim=0), dtype=torch.float32)
+# y = model(x)
+# print(y)
