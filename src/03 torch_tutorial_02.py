@@ -157,6 +157,94 @@ model = Model()
 print(list(model.children()))
 print(list(model.modules()))
 
-# x = torch.tensor(images[0].unsqueeze(dim=0), dtype=torch.float32)
-# y = model(x)
-# print(y)
+loss = nn.BCELoss()
+loss = nn.CrossEntropyLoss()
+loss = nn.MSELoss()
+
+
+import torchmetrics as tm
+
+preds = torch.randn(10, 5).softmax(dim=1)
+preds_sum = torch.sum(preds, dim=1)
+print(preds)
+print(preds_sum)
+print(preds.shape)
+labels = torch.randint(high=5, size=(10,))
+print(labels)
+
+acc = tm.functional.accuracy(preds, labels)
+print(acc)
+
+metric = tm.Accuracy()
+
+batch_size = 2
+for i in range(batch_size):
+    preds = torch.randn(10, 5).softmax(dim=1)
+    labels = torch.randint(high=5, size=(10,))
+    acc = metric(preds, labels)
+acc = metric.compute()
+print(acc)
+
+
+X = torch.randn(200, 1) * 10
+y = X + 3 * torch.randn(200, 1)
+
+fig = plt.figure(figsize=(8, 6))
+plt.scatter(X.numpy(), y.numpy())
+
+
+class LinearRegression(nn.Module):
+    def __init__(self):
+        super(LinearRegression, self).__init__()
+        self.linear = nn.Linear(1, 1)
+
+    def forward(self, x):
+        return self.linear(x)
+
+
+model = LinearRegression()
+print(list(model.children()))
+print(list(model.modules()))
+print(model)
+print(list(model.parameters()))
+
+weight, bias = model.parameters()
+w1, b1 = weight.data.numpy()[0][0], bias.data.numpy()[0]
+print(w1, b1)
+
+x1 = np.array([-30, 30])
+y1 = w1 * x1 + b1
+plt.plot(x1, y1, color="red")
+plt.savefig("images/linear_regression")
+
+
+loss_fn = nn.MSELoss()
+optimizer = optim.SGD(model.parameters(), lr=0.001)
+
+epochs = 100
+losses = []
+for epoch in range(epochs):
+    optimizer.zero_grad()
+
+    y_pred = model(X)
+    loss = loss_fn(y_pred, y)
+    losses.append(loss.item())
+    loss.backward()
+
+    optimizer.step()
+    if epoch % 10 == 0:
+        print(epoch, loss.item())
+
+fig = plt.figure(figsize=(8, 6))
+plt.plot(range(epochs), losses)
+plt.savefig("images/linear_regression_loss")
+
+
+weight, bias = model.parameters()
+w1, b1 = weight.data.numpy()[0][0], bias.data.numpy()[0]
+y1 = w1 * x1 + b1
+
+fig = plt.figure(figsize=(8, 6))
+plt.scatter(X.numpy(), y.numpy())
+plt.plot(x1, y1, color="red")
+plt.savefig("images/linear_regression1")
