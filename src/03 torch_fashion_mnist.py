@@ -28,8 +28,18 @@ fmnist_test = datasets.FashionMNIST(
     transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=0.5, std=1.0)]),
 )
 
-train_loader = DataLoader(fmnist_train, batch_size=128, shuffle=True, num_workers=0)
-test_loader = DataLoader(fmnist_test, batch_size=128, shuffle=False, num_workers=0)
+
+epochs = 10
+batch_size = 64
+learning_rate = 0.001
+
+
+train_loader = DataLoader(
+    fmnist_train, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=0
+)
+test_loader = DataLoader(
+    fmnist_test, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=0
+)
 
 labels_map = {
     0: "T-shirt/Top",
@@ -84,10 +94,6 @@ class NeuralNetwork(nn.Module):
         return num_features
 
 
-epochs = 1
-batch_size = 32
-learning_rate = 0.001
-
 model = NeuralNetwork().to(device)
 print(model)
 
@@ -101,6 +107,18 @@ print(y.shape)
 
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 loss_fn = nn.CrossEntropyLoss()
+
+for epoch in range(epochs):
+    for batch, (X, y) in enumerate(train_loader):
+        X, y = X.to(device), y.to(device)
+        pred = model(X)
+        loss = loss_fn(pred, y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if batch % 99 == 0:
+            print(f"Epoch: {epoch + 1}, Batch: {batch + 1}, Loss: {loss.item():>8f}")
 
 
 def train_loop(dataloader, model, loss_fn, optimizer):
