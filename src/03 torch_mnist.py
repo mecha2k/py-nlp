@@ -35,7 +35,7 @@ mnist_test = datasets.MNIST(
     ),
 )
 
-epochs = 5
+epochs = 1
 batch_size = 128
 learning_rate = 0.001
 
@@ -46,6 +46,21 @@ train_loader = DataLoader(
 test_loader = DataLoader(
     mnist_test, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=0
 )
+
+
+images, labels = next(iter(train_loader))
+print(images.shape, labels.shape)
+
+fig = plt.figure(figsize=(10, 10))
+fig.subplots_adjust(hspace=0.5, wspace=0.5)
+
+rows, cols = 4, 4
+for i in range(1, rows * cols + 1):
+    fig.add_subplot(rows, cols, i)
+    plt.axis("off")
+    plt.imshow(images[i].squeeze().numpy(), cmap="gray")
+    plt.title(labels[i].item(), fontsize=18)
+plt.savefig("images/mnist_dataset", bbox_inches="tight")
 
 
 class MnistModel(nn.Module):
