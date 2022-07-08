@@ -375,7 +375,7 @@ class NMTDecoder(nn.Module):
         self._sampling_temperature = 3
 
         self._cached_ht = None
-        self._cached_p_attn = None
+        self.cached_p_attn = None
         self._cached_decoder_state = None
 
     def _init_indices(self, batch_size):
@@ -408,7 +408,7 @@ class NMTDecoder(nn.Module):
         context_vectors = context_vectors.to(encoder_state.device)
 
         output_vectors = []
-        self._cached_p_attn = []
+        self.cached_p_attn = []
         self._cached_ht = []
         self._cached_decoder_state = encoder_state.cpu().detach().numpy()
 
@@ -432,7 +432,7 @@ class NMTDecoder(nn.Module):
             )
 
             # 부가 작업: 시각화를 위해 어텐션 확률을 저장합니다
-            self._cached_p_attn.append(p_attn.cpu().detach().numpy())
+            self.cached_p_attn.append(p_attn.cpu().detach().numpy())
 
             # 단게 4: 현재 은닉 상태와 문맥 벡터를 사용해 다음 단어를 예측합니다
             prediction_vector = torch.cat((context_vectors, h_t), dim=1)
@@ -613,7 +613,7 @@ class NMTSampler:
         )
         self._last_batch["y_pred"] = y_pred
 
-        attention_batched = np.stack(self.model.decoder._cached_p_attn).transpose(1, 0, 2)
+        attention_batched = np.stack(self.model.decoder.cached_p_attn).transpose(1, 0, 2)
         self._last_batch["attention"] = attention_batched
 
     def _get_source_sentence(self, index, return_string=True):
@@ -723,8 +723,8 @@ if __name__ == "__main__":
         args.model_state_file = os.path.join(args.save_dir, args.model_state_file)
 
         print("파일 경로: ")
-        print("\t{}".format(args.vectorizer_file))
-        print("\t{}".format(args.model_state_file))
+        print(f"\t{args.vectorizer_file}")
+        print(f"\t{args.model_state_file}")
 
     args.cuda = torch.cuda.is_available()
     args.device = torch.device("cuda" if args.cuda else "cpu")
