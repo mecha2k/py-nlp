@@ -9,6 +9,8 @@ from torch.utils.data import Dataset, DataLoader
 from pororo import Pororo
 from pororo.pororo import SUPPORTED_TASKS
 
+print(torch.__version__)
+torch.cuda.is_available = lambda: False
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"{device} is available in torch")
 
@@ -63,7 +65,7 @@ caption = Pororo(task="caption", lang="ko")
 # `Pororo` 클래스는 새로운 객체를 만들 때마다 사용할 모델을 다운로드하여 로드합니다. 다운로드된 데이터는 리눅스일 경우 `~/.pororo` 아래
 # 저장되고 윈도우의 경우 `C:\\pororo` 아래 저장하여 나중에 재사용합니다. 다음과 같은 이미지([http://bit.ly/ny-timesquare]
 # (http://bit.ly/ny-timesquare), Terabass, CC BY-SA 3.0)의 캡션을 만들어 보겠습니다.
-print(caption("../data/New_york_times_square-terabass.jpg"))
+# print(caption("../data/New_york_times_square-terabass.jpg"))
 
 # 이번에는 영어로 캡션을 만들어 보겠습니다.
 caption = Pororo(task="caption", lang="en")

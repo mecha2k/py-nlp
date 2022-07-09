@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(torch.__version__)
 print(f"{device} is available in torch")
 
 plt.style.use("seaborn")
@@ -24,5 +25,6 @@ bce_loss = nn.BCELoss()
 probabilities = nn.Sigmoid()(torch.randn(5, 1, requires_grad=True))
 targets = torch.tensor([1, 0, 0, 1, 0], dtype=torch.float32).view(-1, 1)
 loss = bce_loss(probabilities, targets)
+loss.backward()
 print(probabilities)
 print(loss)
