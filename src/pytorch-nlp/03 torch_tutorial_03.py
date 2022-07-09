@@ -1,4 +1,5 @@
 import torch
+import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -10,9 +11,13 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 
+print(torch.__version__)
+print(torchvision.__version__)
+print(torch.cuda.get_device_name(0))
+print(torch.cuda.get_device_capability(0))
+print(torch.cuda.current_stream())
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(torch.__version__)
 print(f"{device} is available in torch")
 
 plt.style.use("seaborn")
