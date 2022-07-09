@@ -33,3 +33,18 @@ loss = bce_loss(probabilities, targets)
 loss.backward()
 print(probabilities)
 print(loss)
+
+loss_fn = nn.CrossEntropyLoss()
+outputs = torch.randn(3, 5, requires_grad=True).to(device)
+targets = torch.tensor([1, 3, 2], dtype=torch.int64).to(device)
+loss = loss_fn(outputs, targets)
+loss.backward()
+print(outputs)
+print(loss)
+
+
+import re
+
+text = "I am a NLPer>?,!"
+text = re.sub(r"([.,!?])", r" \1 ", text)
+print(text)
