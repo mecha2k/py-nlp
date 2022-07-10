@@ -21,8 +21,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"{device} is available in torch")
 
 plt.style.use("seaborn")
-plt.rcParams["font.size"] = 16
-plt.rcParams["figure.dpi"] = 200
+plt.rcParams["font.size"] = 36
+plt.rcParams["figure.dpi"] = 300
 plt.rcParams["font.family"] = "NanumBarunGothic"
 plt.rcParams["axes.unicode_minus"] = False
 
@@ -48,3 +48,6 @@ import re
 text = "I am a NLPer>?,!"
 text = re.sub(r"([.,!?])", r" \1 ", text)
 print(text)
+
+for i in range(3):
+    print(np.random.normal(loc=(3, 3), scale=1))
