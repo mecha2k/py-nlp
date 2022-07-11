@@ -8,17 +8,16 @@ from argparse import Namespace
 args = Namespace(
     raw_train_dataset_csv="../data/yelp/raw_train.csv",
     raw_test_dataset_csv="../data/yelp/raw_test.csv",
-    proportion_subset_of_train=0.1,
+    proportion_subset_of_train=0.01,
     train_proportion=0.7,
     val_proportion=0.15,
     test_proportion=0.15,
-    output_munged_csv="../data/yelp/reviews_with_splits_lite_small.csv",
+    output_murged_csv="../data/yelp/reviews_with_splits_lite_small.csv",
     seed=42,
 )
 
 np.random.seed(args.seed)
 train_reviews = pd.read_csv(args.raw_train_dataset_csv, header=None, names=["rating", "review"])
-train_reviews = train_reviews[:10000]
 train_reviews.info()
 by_rating = collections.defaultdict(list)
 for _, row in train_reviews.iterrows():
@@ -65,7 +64,7 @@ def preprocess_text(text):
     return text
 
 
-final_reviews.review = final_reviews.review.apply(preprocess_text)
+final_reviews["review"] = final_reviews.review.apply(preprocess_text)
 final_reviews["rating"] = final_reviews.rating.apply({1: "negative", 2: "positive"}.get)
 print(final_reviews.head())
-final_reviews.to_csv(args.output_munged_csv, index=False)
+final_reviews.to_csv(args.output_murged_csv, index=False)

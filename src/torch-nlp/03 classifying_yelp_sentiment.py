@@ -226,7 +226,7 @@ args = Namespace(
     early_stopping_criteria=5,
     learning_rate=0.001,
     num_epochs=100,
-    seed=1337,
+    seed=42,
     catch_keyboard_interrupt=True,
     cuda=True,
     expand_filepaths_to_save_dir=True,
@@ -312,17 +312,9 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(
     optimizer=optimizer, mode="min", factor=0.5, patience=1
 )
 
+dataset.set_split("train")
 train_state = make_train_state(args)
 epoch_bar = tqdm.tqdm(desc="training routine", total=args.num_epochs, position=0)
-
-dataset.set_split("train")
-train_bar = tqdm.tqdm(
-    desc="split=train", total=dataset.get_num_batches(args.batch_size), position=1, leave=True
-)
-dataset.set_split("val")
-val_bar = tqdm.tqdm(
-    desc="split=val", total=dataset.get_num_batches(args.batch_size), position=1, leave=True
-)
 
 try:
     for epoch_index in range(args.num_epochs):
@@ -339,15 +331,11 @@ try:
             loss = loss_func(y_pred, batch_dict["y_target"].float())
             loss_t = loss.item()
             running_loss += (loss_t - running_loss) / (batch_index + 1)
-
             loss.backward()
             optimizer.step()
 
             acc_t = compute_accuracy(y_pred, batch_dict["y_target"])
             running_acc += (acc_t - running_acc) / (batch_index + 1)
-
-            # train_bar.set_postfix(loss=running_loss, acc=running_acc, epoch=epoch_index)
-            # train_bar.update()
 
         train_state["train_loss"].append(running_loss)
         train_state["train_acc"].append(running_acc)
@@ -363,12 +351,8 @@ try:
             loss = loss_func(y_pred, batch_dict["y_target"].float())
             loss_t = loss.item()
             running_loss += (loss_t - running_loss) / (batch_index + 1)
-
             acc_t = compute_accuracy(y_pred, batch_dict["y_target"])
             running_acc += (acc_t - running_acc) / (batch_index + 1)
-
-            # val_bar.set_postfix(loss=running_loss, acc=running_acc, epoch=epoch_index)
-            # val_bar.update()
 
         train_state["val_loss"].append(running_loss)
         train_state["val_acc"].append(running_acc)
@@ -376,16 +360,9 @@ try:
 
         scheduler.step(train_state["val_loss"][-1])
 
-        train_bar.n = 0
-        val_bar.n = 0
         epoch_bar.update()
-
         if train_state["stop_early"]:
             break
-
-        train_bar.n = 0
-        val_bar.n = 0
-        epoch_bar.update()
 
 except KeyboardInterrupt:
     print("Exiting loop")
@@ -406,13 +383,11 @@ for batch_index, batch_dict in enumerate(batch_generator):
     loss = loss_func(y_pred, batch_dict["y_target"].float())
     loss_t = loss.item()
     running_loss += (loss_t - running_loss) / (batch_index + 1)
-
     acc_t = compute_accuracy(y_pred, batch_dict["y_target"])
     running_acc += (acc_t - running_acc) / (batch_index + 1)
 
 train_state["test_loss"] = running_loss
 train_state["test_acc"] = running_acc
-
 
 print("테스트 손실: {:.3f}".format(train_state["test_loss"]))
 print("테스트 정확도: {:.2f}".format(train_state["test_acc"]))
@@ -427,15 +402,12 @@ def preprocess_text(text):
 
 def predict_rating(review, classifier, vectorizer, decision_threshold=0.5):
     review = preprocess_text(review)
-
     vectorized_review = torch.tensor(vectorizer.vectorize(review))
     result = classifier(vectorized_review.view(1, -1))
-
     probability_value = torch.sigmoid(result).item()
     index = 1
     if probability_value < decision_threshold:
         index = 0
-
     return vectorizer.rating_vocab.lookup_index(index)
 
 
