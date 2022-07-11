@@ -73,7 +73,7 @@ class Vocabulary:
         return len(self._token_to_idx)
 
 
-class CBOWVectorizer(object):
+class CBOWVectorizer:
     def __init__(self, cbow_vocab):
         self.cbow_vocab = cbow_vocab
 
@@ -262,7 +262,7 @@ if __name__ == "__main__":
         save_dir="../data/books",
         embedding_size=50,
         seed=42,
-        num_epochs=100,
+        num_epochs=10,
         learning_rate=0.0001,
         batch_size=32,
         early_stopping_criteria=5,
