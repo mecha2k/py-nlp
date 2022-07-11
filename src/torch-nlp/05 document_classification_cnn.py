@@ -396,7 +396,7 @@ if __name__ == "__main__":
         vectorizer_file="vectorizer.json",
         model_state_file="model.pth",
         save_dir="../data/ag_news",
-        glove_filepath="../data/glove/glove.6B.100d.txt",
+        glove_filepath="../data/glove.6B/glove.6B.100d.txt",
         use_glove=True,
         embedding_size=100,
         hidden_dim=100,
