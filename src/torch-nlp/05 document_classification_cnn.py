@@ -16,28 +16,14 @@ from tqdm import tqdm
 
 
 class Vocabulary:
-    def __init__(self, token_to_idx=None, mask_token="<MASK>", add_unk=True, unk_token="<UNK>"):
+    def __init__(self, token_to_idx=None):
         if token_to_idx is None:
             token_to_idx = {}
         self._token_to_idx = token_to_idx
         self._idx_to_token = {idx: token for token, idx in self._token_to_idx.items()}
 
-        self._add_unk = add_unk
-        self._unk_token = unk_token
-        self._mask_token = mask_token
-
-        self.mask_index = self.add_token(self._mask_token)
-        self.unk_index = -1
-        if add_unk:
-            self.unk_index = self.add_token(unk_token)
-
     def to_serializable(self):
-        return {
-            "token_to_idx": self._token_to_idx,
-            "add_unk": self._add_unk,
-            "unk_token": self._unk_token,
-            "mask_token": self._mask_token,
-        }
+        return {"token_to_idx": self._token_to_idx}
 
     @classmethod
     def from_serializable(cls, contents):
@@ -56,10 +42,7 @@ class Vocabulary:
         return [self.add_token(token) for token in tokens]
 
     def lookup_token(self, token):
-        if self.unk_index >= 0:
-            return self._token_to_idx.get(token, self.unk_index)
-        else:
-            return self._token_to_idx[token]
+        return self._token_to_idx[token]
 
     def lookup_index(self, index):
         if index not in self._idx_to_token:
@@ -82,9 +65,7 @@ class SequenceVocabulary(Vocabulary):
         begin_seq_token="<BEGIN>",
         end_seq_token="<END>",
     ):
-
         super(SequenceVocabulary, self).__init__(token_to_idx)
-
         self._mask_token = mask_token
         self._unk_token = unk_token
         self._begin_seq_token = begin_seq_token
@@ -122,7 +103,7 @@ class NewsVectorizer:
     def vectorize(self, title, vector_length=-1):
         indices = [self.title_vocab.begin_seq_index]
         indices.extend(self.title_vocab.lookup_token(token) for token in title.split(" "))
-        indices.append(self.title_vocab.end_seq_index)
+        indices.extend([self.title_vocab.end_seq_index])
         if vector_length < 0:
             vector_length = len(indices)
         out_vector = np.zeros(vector_length, dtype=np.int64)
@@ -431,6 +412,7 @@ if __name__ == "__main__":
     else:
         dataset = NewsDataset.load_dataset_and_make_vectorizer(args.news_csv)
         dataset.save_vectorizer(args.vectorizer_file)
+
     vectorizer = dataset.get_vectorizer()
 
     if args.use_glove:

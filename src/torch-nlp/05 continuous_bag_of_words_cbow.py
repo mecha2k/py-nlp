@@ -196,6 +196,18 @@ class CBOWClassifier(nn.Module):
         self.fc1 = nn.Linear(in_features=embedding_size, out_features=vocabulary_size)
 
     def forward(self, x_in, apply_softmax=False):
+        """분류기의 정방향 계산
+        매개변수:
+            x_in (torch.Tensor): 입력 데이터 텐서
+                x_in.shape는 (batch, input_dim)입니다.
+            apply_softmax (bool): 소프트맥스 활성화 함수를 위한 플래그
+                크로스-엔트로피 손실을 사용하려면 False로 지정합니다
+        반환값:
+            결과 텐서. tensor.shape은 (batch, output_dim)입니다.
+        """
+        x_embedded = self.embedding(x_in)
+        x_embedded = x_embedded.sum(dim=1)
+        x_embedded_sum = F.dropout(x_embedded, p=0.3)
         x_embedded_sum = F.dropout(self.embedding(x_in).sum(dim=1), 0.3)
         y_out = self.fc1(x_embedded_sum)
         if apply_softmax:
@@ -323,6 +335,7 @@ if __name__ == "__main__":
 
             for batch_index, batch_dict in enumerate(batch_generator):
                 optimizer.zero_grad()
+                x_in = batch_dict["x_data"]
                 y_pred = classifier(x_in=batch_dict["x_data"])
                 loss = loss_func(y_pred, batch_dict["y_target"])
                 loss_t = loss.item()
