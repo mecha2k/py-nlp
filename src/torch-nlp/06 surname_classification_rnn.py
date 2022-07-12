@@ -13,28 +13,14 @@ import tqdm
 
 
 class Vocabulary:
-    def __init__(self, token_to_idx=None, mask_token="<MASK>", add_unk=True, unk_token="<UNK>"):
+    def __init__(self, token_to_idx=None):
         if token_to_idx is None:
             token_to_idx = {}
         self._token_to_idx = token_to_idx
         self._idx_to_token = {idx: token for token, idx in self._token_to_idx.items()}
 
-        self._add_unk = add_unk
-        self._unk_token = unk_token
-        self._mask_token = mask_token
-
-        self.mask_index = self.add_token(self._mask_token)
-        self.unk_index = -1
-        if add_unk:
-            self.unk_index = self.add_token(unk_token)
-
     def to_serializable(self):
-        return {
-            "token_to_idx": self._token_to_idx,
-            "add_unk": self._add_unk,
-            "unk_token": self._unk_token,
-            "mask_token": self._mask_token,
-        }
+        return {"token_to_idx": self._token_to_idx}
 
     @classmethod
     def from_serializable(cls, contents):
@@ -53,10 +39,7 @@ class Vocabulary:
         return [self.add_token(token) for token in tokens]
 
     def lookup_token(self, token):
-        if self.unk_index >= 0:
-            return self._token_to_idx.get(token, self.unk_index)
-        else:
-            return self._token_to_idx[token]
+        return self._token_to_idx[token]
 
     def lookup_index(self, index):
         if index not in self._idx_to_token:
@@ -79,9 +62,7 @@ class SequenceVocabulary(Vocabulary):
         begin_seq_token="<BEGIN>",
         end_seq_token="<END>",
     ):
-
         super(SequenceVocabulary, self).__init__(token_to_idx)
-
         self._mask_token = mask_token
         self._unk_token = unk_token
         self._begin_seq_token = begin_seq_token
@@ -119,11 +100,10 @@ class SurnameVectorizer(object):
     def vectorize(self, surname, vector_length=-1):
         indices = [self.char_vocab.begin_seq_index]
         indices.extend(self.char_vocab.lookup_token(token) for token in surname)
-        indices.append(self.char_vocab.end_seq_index)
+        indices.extend([self.char_vocab.end_seq_index])
 
         if vector_length < 0:
             vector_length = len(indices)
-
         out_vector = np.zeros(vector_length, dtype=np.int64)
         out_vector[: len(indices)] = indices
         out_vector[len(indices) :] = self.char_vocab.mask_index
@@ -134,19 +114,16 @@ class SurnameVectorizer(object):
     def from_dataframe(cls, surname_df):
         char_vocab = SequenceVocabulary()
         nationality_vocab = Vocabulary()
-
         for index, row in surname_df.iterrows():
             for char in row.surname:
                 char_vocab.add_token(char)
             nationality_vocab.add_token(row.nationality)
-
         return cls(char_vocab, nationality_vocab)
 
     @classmethod
     def from_serializable(cls, contents):
         char_vocab = SequenceVocabulary.from_serializable(contents["char_vocab"])
         nat_vocab = Vocabulary.from_serializable(contents["nationality_vocab"])
-
         return cls(char_vocab=char_vocab, nationality_vocab=nat_vocab)
 
     def to_serializable(self):
@@ -165,10 +142,8 @@ class SurnameDataset(Dataset):
 
         self.train_df = self.surname_df[self.surname_df.split == "train"]
         self.train_size = len(self.train_df)
-
         self.val_df = self.surname_df[self.surname_df.split == "val"]
         self.validation_size = len(self.val_df)
-
         self.test_df = self.surname_df[self.surname_df.split == "test"]
         self.test_size = len(self.test_df)
 
@@ -340,16 +315,16 @@ def handle_dirs(dirpath):
 
 
 args = Namespace(
-    surname_csv="../data/surnames/surnames_with_splits.csv",
+    surname_csv="../data/surnames/surnames_with_splits_cond.csv",
     vectorizer_file="vectorizer_rnn.json",
     model_state_file="model_rnn.pth",
     save_dir="../data/surnames",
     char_embedding_size=100,
     rnn_hidden_size=64,
-    num_epochs=100,
+    num_epochs=10,
     learning_rate=1e-3,
-    batch_size=64,
-    seed=1337,
+    batch_size=128,
+    seed=42,
     early_stopping_criteria=5,
     cuda=True,
     catch_keyboard_interrupt=True,
