@@ -135,6 +135,8 @@ class CBOWDataset(Dataset):
     @classmethod
     def load_dataset_and_make_vectorizer(cls, cbow_csv):
         cbow_df = pd.read_csv(cbow_csv)
+        cbow_df.info()
+        print(cbow_df.split.value_counts())
         train_cbow_df = cbow_df[cbow_df.split == "train"]
         return cls(cbow_df, CBOWVectorizer.from_dataframe(train_cbow_df))
 
@@ -262,9 +264,9 @@ if __name__ == "__main__":
         save_dir="../data/books",
         embedding_size=50,
         seed=42,
-        num_epochs=10,
+        num_epochs=1,
         learning_rate=0.0001,
-        batch_size=32,
+        batch_size=128,
         early_stopping_criteria=5,
         cuda=True,
         catch_keyboard_interrupt=True,
@@ -294,12 +296,11 @@ if __name__ == "__main__":
         dataset.save_vectorizer(args.vectorizer_file)
 
     vectorizer = dataset.get_vectorizer()
-
     classifier = CBOWClassifier(
         vocabulary_size=len(vectorizer.cbow_vocab), embedding_size=args.embedding_size
     )
-
     classifier = classifier.to(args.device)
+    print(f"vocab size : {len(vectorizer.cbow_vocab)}")
 
     loss_func = nn.CrossEntropyLoss()
     optimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
