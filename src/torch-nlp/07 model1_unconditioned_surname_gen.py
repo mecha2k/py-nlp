@@ -373,8 +373,8 @@ def handle_dirs(dirpath):
 if __name__ == "__main__":
     args = Namespace(
         surname_csv="../data/surnames/surnames_with_splits_cond.csv",
-        vectorizer_file="vectorizer_cond.json",
-        model_state_file="model_cond.pth",
+        vectorizer_file="vectorizer_uncond.json",
+        model_state_file="model_uncond.pth",
         save_dir="../data/surnames/",
         char_embedding_size=32,
         rnn_hidden_size=32,

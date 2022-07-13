@@ -19,26 +19,6 @@ from tqdm import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-## 신경망 기계 번역 모델
-# 1. NMTEncoder
-#     - 소스 시퀀스를 입력으로 받아 임베딩하여 양방향 GRU에 주입합니다.
-# 2. NMTDecoder
-#     - 인코더 상태와 어텐션을 사용해 디코더가 새로운 시퀀스를 생성합니다.
-#     - 타임 스텝마다 정답 타깃 시퀀스를 입력으로 사용합니다.
-#     - 또는 디코더가 선택한 시퀀스를 입력으로 사용할 수도 있습니다.
-#     - 이를 커리큘럼 학습(curriculum learning), 탐색 학습(learning to search)이라 부릅니다.
-# 3. NMTModel
-#     - 인코더와 디코더를 하나의 클래스로 구성합니다.
-#
-# 만약 코랩에서 실행하는 경우 아래 코드를 실행하여 전처리된 데이터를 다운로드하세요.
-# get_ipython().system("mkdir data")
-# get_ipython().system("wget https://git.io/JqQBE -O data/download.py")
-# get_ipython().system("wget https://git.io/JqQB7 -O data/get-all-data.sh")
-# get_ipython().system("chmod 755 data/get-all-data.sh")
-# get_ipython().run_line_magic("cd", "data")
-# get_ipython().system("./get-all-data.sh")
-# get_ipython().run_line_magic("cd", "..")
-
 
 class Vocabulary:
     def __init__(self, token_to_idx=None):
