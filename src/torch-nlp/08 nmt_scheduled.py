@@ -782,7 +782,7 @@ if __name__ == "__main__":
             test_results.append(sampler.get_ith_item(i, False))
 
     plt.hist([r["bleu-4"] for r in test_results], bins=100)
-    plt.savefig("bleu_hist.png", dpi=200)
+    plt.savefig("images/bleu_hist.png", dpi=200)
     print("bleu-4 mean: ", np.mean([r["bleu-4"] for r in test_results]))
     print("bleu-4 median: ", np.median([r["bleu-4"] for r in test_results]))
 
@@ -801,7 +801,7 @@ if __name__ == "__main__":
     top_results = [x for x in all_results if x["bleu-4"] > 0.5]
     len(top_results)
 
-    for sample in top_results:
+    for idx, sample in enumerate(top_results):
         plt.figure(figsize=(6, 4))
         target_len = len(sample["sampled"])
         source_len = len(sample["source"])
@@ -815,8 +815,8 @@ if __name__ == "__main__":
         ax.set_ylabel("Source Sentence\n\n")
         ax.set_title("Attention Matrix")
         plt.tight_layout()
-        print(f"{args.save_dir}/{sample['id']}")
-        plt.savefig(f"{args.save_dir}/{sample['id']}", dpi=200)
+        print(f"images/{idx:2d}")
+        plt.savefig(f"images/{idx:2d}", dpi=200)
 
     results = get_all_sentences(vectorizer, batch_dict, 1)
     print(results)
