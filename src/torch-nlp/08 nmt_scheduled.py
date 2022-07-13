@@ -231,7 +231,6 @@ class NMTDataset(Dataset):
         self._target_df = None
         self._target_size = None
         self._target_split = None
-
         self.set_split("train")
 
     @classmethod
@@ -308,16 +307,13 @@ class NMTEncoder(nn.Module):
         x_packed = pack_padded_sequence(
             x_embedded, x_lengths.detach().cpu().numpy(), batch_first=True
         )
-
         # x_birnn_h.shape = (num_rnn, batch_size, feature_size)
         x_birnn_out, x_birnn_h = self.birnn(x_packed)
         # (batch_size, num_rnn, feature_size)로 변환
         x_birnn_h = x_birnn_h.permute(1, 0, 2)
-
         # 특성 펼침; (batch_size, num_rnn * feature_size)로 바꾸기
         x_birnn_h = x_birnn_h.contiguous().view(x_birnn_h.size(0), -1)
         x_unpacked, _ = pad_packed_sequence(x_birnn_out, batch_first=True)
-
         return x_unpacked, x_birnn_h
 
 
@@ -373,7 +369,6 @@ class NMTDecoder(nn.Module):
             # 즉 입력은 (Batch, Seq) 시퀀스에 대해 반복해야 하므로 (Seq, Batch)로 차원을 바꿉니다
             target_sequence = target_sequence.permute(1, 0)
             output_sequence_size = target_sequence.size(0)
-
         # 주어진 인코더의 은닉 상태를 초기 은닉 상태로 사용합니다
         h_t = self.hidden_map(initial_hidden_state)
 
@@ -393,28 +388,17 @@ class NMTDecoder(nn.Module):
         self._cached_decoder_state = encoder_state.cpu().detach().numpy()
 
         for i in range(output_sequence_size):
-            # 스케줄링된 샘플링 사용 여부
             use_sample = np.random.random() < sample_probability
             if not use_sample:
                 y_t_index = target_sequence[i]
-
-            # 단계 1: 단어를 임베딩하고 이전 문맥과 연결합니다
             y_input_vector = self.target_embedding(y_t_index)
             rnn_input = torch.cat([y_input_vector, context_vectors], dim=1)
-
-            # 단계 2: GRU를 적용하고 새로운 은닉 벡터를 얻습니다
             h_t = self.gru_cell(rnn_input, h_t)
             self._cached_ht.append(h_t.cpu().detach().numpy())
-
-            # 단계 3: 현재 은닉 상태를 사용해 인코더의 상태를 주목합니다
             context_vectors, p_attn, _ = verbose_attention(
                 encoder_state_vectors=encoder_state, query_vector=h_t
             )
-
-            # 부가 작업: 시각화를 위해 어텐션 확률을 저장합니다
             self.cached_p_attn.append(p_attn.cpu().detach().numpy())
-
-            # 단게 4: 현재 은닉 상태와 문맥 벡터를 사용해 다음 단어를 예측합니다
             prediction_vector = torch.cat((context_vectors, h_t), dim=1)
             score_for_y_t_index = self.classifier(F.dropout(prediction_vector, 0.3))
 
@@ -423,7 +407,6 @@ class NMTDecoder(nn.Module):
                 # _, y_t_index = torch.max(p_y_t_index, 1)
                 y_t_index = torch.multinomial(p_y_t_index, 1).squeeze()
 
-            # 부가 작업: 예측 성능 점수를 기록합니다
             output_vectors.append(score_for_y_t_index)
 
         output_vectors = torch.stack(output_vectors).permute(1, 0, 2)
@@ -505,34 +488,21 @@ def make_train_state(args):
 
 
 def update_train_state(args, model, train_state):
-    # 적어도 한 번 모델을 저장합니다
     if train_state["epoch_index"] == 0:
         torch.save(model.state_dict(), train_state["model_filename"])
         train_state["stop_early"] = False
-
-    # 성능이 향상되면 모델을 저장합니다
     elif train_state["epoch_index"] >= 1:
         loss_tm1, loss_t = train_state["val_loss"][-2:]
-
-        # 손실이 나빠지면
         if loss_t >= loss_tm1:
-            # 조기 종료 단계 업데이트
             train_state["early_stopping_step"] += 1
-        # 손실이 감소하면
         else:
-            # 최상의 모델 저장
             if loss_t < train_state["early_stopping_best_val"]:
                 torch.save(model.state_dict(), train_state["model_filename"])
                 train_state["early_stopping_best_val"] = loss_t
-
-            # 조기 종료 단계 재설정
             train_state["early_stopping_step"] = 0
-
-        # 조기 종료 여부 확인
         train_state["stop_early"] = (
             train_state["early_stopping_step"] >= args.early_stopping_criteria
         )
-
     return train_state
 
 
@@ -546,15 +516,11 @@ def normalize_sizes(y_pred, y_true):
 
 def compute_accuracy(y_pred, y_true, mask_index):
     y_pred, y_true = normalize_sizes(y_pred, y_true)
-
     _, y_pred_indices = y_pred.max(dim=1)
-
     correct_indices = torch.eq(y_pred_indices, y_true).float()
     valid_indices = torch.ne(y_true, mask_index).float()
-
     n_correct = (correct_indices * valid_indices).sum().item()
     n_valid = valid_indices.sum().item()
-
     return n_correct / n_valid * 100
 
 
@@ -683,7 +649,7 @@ if __name__ == "__main__":
         dataset_csv="../data/nmt/simplest_eng_fra.csv",
         vectorizer_file="vectorizer.json",
         model_state_file="model.pth",
-        save_dir="../data/nmt/models",
+        save_dir="../data/nmt",
         reload_from_files=False,
         expand_filepath_to_save_dir=True,
         cuda=True,
@@ -701,7 +667,6 @@ if __name__ == "__main__":
     if args.expand_filepath_to_save_dir:
         args.vectorizer_file = os.path.join(args.save_dir, args.vectorizer_file)
         args.model_state_file = os.path.join(args.save_dir, args.model_state_file)
-
         print("파일 경로: ")
         print(f"\t{args.vectorizer_file}")
         print(f"\t{args.model_state_file}")
@@ -709,7 +674,6 @@ if __name__ == "__main__":
     args.cuda = torch.cuda.is_available()
     args.device = torch.device("cuda" if args.cuda else "cpu")
     print("CUDA 사용 여부: {}".format(args.cuda))
-
     handle_dirs(args.save_dir)
     set_seed_everywhere(args.seed, args.cuda)
 
@@ -737,7 +701,6 @@ if __name__ == "__main__":
         print("로드한 모델")
     else:
         print("새로운 모델")
-
     model = model.to(args.device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -746,17 +709,7 @@ if __name__ == "__main__":
     )
     mask_index = vectorizer.target_vocab.mask_index
     train_state = make_train_state(args)
-
     epoch_bar = tqdm(desc="training routine", total=args.num_epochs, position=0)
-
-    dataset.set_split("train")
-    train_bar = tqdm(
-        desc="split=train", total=dataset.get_num_batches(args.batch_size), position=1, leave=True
-    )
-    dataset.set_split("val")
-    val_bar = tqdm(
-        desc="split=val", total=dataset.get_num_batches(args.batch_size), position=1, leave=True
-    )
 
     try:
         for epoch_index in range(args.num_epochs):
@@ -773,14 +726,12 @@ if __name__ == "__main__":
 
             for batch_index, batch_dict in enumerate(batch_generator):
                 optimizer.zero_grad()
-
                 y_pred = model(
                     batch_dict["x_source"],
                     batch_dict["x_source_length"],
                     batch_dict["x_target"],
                     sample_probability=sample_probability,
                 )
-
                 loss = sequence_loss(y_pred, batch_dict["y_target"], mask_index)
                 loss.backward()
                 optimizer.step()
@@ -788,10 +739,6 @@ if __name__ == "__main__":
                 running_loss += (loss.item() - running_loss) / (batch_index + 1)
                 acc_t = compute_accuracy(y_pred, batch_dict["y_target"], mask_index)
                 running_acc += (acc_t - running_acc) / (batch_index + 1)
-
-                # 진행 상태 막대 업데이트
-                train_bar.set_postfix(loss=running_loss, acc=running_acc, epoch=epoch_index)
-                train_bar.update()
 
             train_state["train_loss"].append(running_loss)
             train_state["train_acc"].append(running_acc)
@@ -817,9 +764,6 @@ if __name__ == "__main__":
                 acc_t = compute_accuracy(y_pred, batch_dict["y_target"], mask_index)
                 running_acc += (acc_t - running_acc) / (batch_index + 1)
 
-                val_bar.set_postfix(loss=running_loss, acc=running_acc, epoch=epoch_index)
-                val_bar.update()
-
             train_state["val_loss"].append(running_loss)
             train_state["val_acc"].append(running_acc)
 
@@ -829,8 +773,6 @@ if __name__ == "__main__":
             if train_state["stop_early"]:
                 break
 
-            train_bar.n = 0
-            val_bar.n = 0
             epoch_bar.set_postfix(best_val=train_state["early_stopping_best_val"])
             epoch_bar.update()
 
