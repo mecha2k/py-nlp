@@ -632,18 +632,6 @@ def get_all_sentences(vectorizer, batch_dict, index):
     }
 
 
-def sentence_from_indices(indices, vocab, strict=True):
-    out = []
-    for index in indices:
-        if index == vocab.begin_seq_index and strict:
-            continue
-        elif index == vocab.end_seq_index and strict:
-            return " ".join(out)
-        else:
-            out.append(vocab.lookup_index(index))
-    return " ".join(out)
-
-
 if __name__ == "__main__":
     args = Namespace(
         dataset_csv="../data/nmt/simplest_eng_fra.csv",
