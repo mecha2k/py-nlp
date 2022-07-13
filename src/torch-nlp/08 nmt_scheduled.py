@@ -600,38 +600,6 @@ class NMTSampler:
         return output
 
 
-def get_source_sentence(vectorizer, batch_dict, index):
-    indices = batch_dict["x_source"][index].cpu().data.numpy()
-    vocab = vectorizer.source_vocab
-    return sentence_from_indices(indices, vocab)
-
-
-def get_true_sentence(vectorizer, batch_dict, index):
-    return sentence_from_indices(
-        batch_dict["y_target"].cpu().data.numpy()[index], vectorizer.target_vocab
-    )
-
-
-def get_sampled_sentence(vectorizer, batch_dict, index):
-    y_pred = model(
-        x_source=batch_dict["x_source"],
-        x_source_lengths=batch_dict["x_source_length"],
-        target_sequence=batch_dict["x_target"],
-        sample_probability=1.0,
-    )
-    return sentence_from_indices(
-        torch.max(y_pred, dim=2)[1].cpu().data.numpy()[index], vectorizer.target_vocab
-    )
-
-
-def get_all_sentences(vectorizer, batch_dict, index):
-    return {
-        "source": get_source_sentence(vectorizer, batch_dict, index),
-        "truth": get_true_sentence(vectorizer, batch_dict, index),
-        "sampled": get_sampled_sentence(vectorizer, batch_dict, index),
-    }
-
-
 if __name__ == "__main__":
     args = Namespace(
         dataset_csv="../data/nmt/simplest_eng_fra.csv",
@@ -798,7 +766,7 @@ if __name__ == "__main__":
     for i in range(args.batch_size):
         all_results.append(sampler.get_ith_item(i, False))
 
-    top_results = [x for x in all_results if x["bleu-4"] > 0.5]
+    top_results = [x for x in all_results if x["bleu-4"] > 0.8]
     len(top_results)
 
     for idx, sample in enumerate(top_results):
@@ -817,6 +785,34 @@ if __name__ == "__main__":
         plt.tight_layout()
         print(f"images/{idx:2d}")
         plt.savefig(f"images/{idx:2d}", dpi=200)
+
+    def get_source_sentence(vectorizer, batch_dict, index):
+        indices = batch_dict["x_source"][index].cpu().data.numpy()
+        vocab = vectorizer.source_vocab
+        return sentence_from_indices(indices, vocab)
+
+    def get_true_sentence(vectorizer, batch_dict, index):
+        return sentence_from_indices(
+            batch_dict["y_target"].cpu().data.numpy()[index], vectorizer.target_vocab
+        )
+
+    def get_sampled_sentence(vectorizer, batch_dict, index):
+        y_pred = model(
+            x_source=batch_dict["x_source"],
+            x_source_lengths=batch_dict["x_source_length"],
+            target_sequence=batch_dict["x_target"],
+            sample_probability=1.0,
+        )
+        return sentence_from_indices(
+            torch.max(y_pred, dim=2)[1].cpu().data.numpy()[index], vectorizer.target_vocab
+        )
+
+    def get_all_sentences(vectorizer, batch_dict, index):
+        return {
+            "source": get_source_sentence(vectorizer, batch_dict, index),
+            "truth": get_true_sentence(vectorizer, batch_dict, index),
+            "sampled": get_sampled_sentence(vectorizer, batch_dict, index),
+        }
 
     results = get_all_sentences(vectorizer, batch_dict, 1)
     print(results)
