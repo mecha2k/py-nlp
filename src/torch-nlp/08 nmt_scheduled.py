@@ -171,7 +171,6 @@ class NMTVectorizer:
 
         max_source_length = 0
         max_target_length = 0
-
         for _, row in text_df.iterrows():
             source_tokens = row["source_language"].split(" ")
             if len(source_tokens) > max_source_length:
@@ -215,19 +214,15 @@ class NMTDataset(Dataset):
 
         self.train_df = self.text_df[self.text_df.split == "train"]
         self.train_size = len(self.train_df)
-
         self.val_df = self.text_df[self.text_df.split == "val"]
         self.validation_size = len(self.val_df)
-
         self.test_df = self.text_df[self.text_df.split == "test"]
         self.test_size = len(self.test_df)
-
         self._lookup_dict = {
             "train": (self.train_df, self.train_size),
             "val": (self.val_df, self.validation_size),
             "test": (self.test_df, self.test_size),
         }
-
         self._target_df = None
         self._target_size = None
         self._target_split = None
@@ -349,7 +344,6 @@ class NMTDecoder(nn.Module):
         self.classifier = nn.Linear(rnn_hidden_size * 2, num_embeddings)
         self.bos_index = bos_index
         self._sampling_temperature = 3
-
         self._cached_ht = None
         self.cached_p_attn = None
         self._cached_decoder_state = None
@@ -369,15 +363,13 @@ class NMTDecoder(nn.Module):
             # 즉 입력은 (Batch, Seq) 시퀀스에 대해 반복해야 하므로 (Seq, Batch)로 차원을 바꿉니다
             target_sequence = target_sequence.permute(1, 0)
             output_sequence_size = target_sequence.size(0)
+        batch_size = encoder_state.size(0)
         # 주어진 인코더의 은닉 상태를 초기 은닉 상태로 사용합니다
         h_t = self.hidden_map(initial_hidden_state)
-
-        batch_size = encoder_state.size(0)
         # 문맥 벡터를 0으로 초기화합니다
         context_vectors = self._init_context_vectors(batch_size)
         # 첫 단어 y_t를 BOS로 초기화합니다
         y_t_index = self._init_indices(batch_size)
-
         h_t = h_t.to(encoder_state.device)
         y_t_index = y_t_index.to(encoder_state.device)
         context_vectors = context_vectors.to(encoder_state.device)
@@ -386,7 +378,6 @@ class NMTDecoder(nn.Module):
         self.cached_p_attn = []
         self._cached_ht = []
         self._cached_decoder_state = encoder_state.cpu().detach().numpy()
-
         for i in range(output_sequence_size):
             use_sample = np.random.random() < sample_probability
             if not use_sample:
@@ -401,16 +392,11 @@ class NMTDecoder(nn.Module):
             self.cached_p_attn.append(p_attn.cpu().detach().numpy())
             prediction_vector = torch.cat((context_vectors, h_t), dim=1)
             score_for_y_t_index = self.classifier(F.dropout(prediction_vector, 0.3))
-
             if use_sample:
                 p_y_t_index = F.softmax(score_for_y_t_index * self._sampling_temperature, dim=1)
-                # _, y_t_index = torch.max(p_y_t_index, 1)
                 y_t_index = torch.multinomial(p_y_t_index, 1).squeeze()
-
             output_vectors.append(score_for_y_t_index)
-
         output_vectors = torch.stack(output_vectors).permute(1, 0, 2)
-
         return output_vectors
 
 
@@ -558,7 +544,6 @@ class NMTSampler:
             target_sequence=batch_dict["x_target"],
         )
         self._last_batch["y_pred"] = y_pred
-
         attention_batched = np.stack(self.model.decoder.cached_p_attn).transpose(1, 0, 2)
         self._last_batch["attention"] = attention_batched
 
@@ -585,18 +570,14 @@ class NMTSampler:
             "sampled": self._get_sampled_sentence(index, return_string=return_string),
             "attention": self._last_batch["attention"][index],
         }
-
         reference = output["reference"]
         hypothesis = output["sampled"]
-
         if not return_string:
             reference = " ".join(reference)
             hypothesis = " ".join(hypothesis)
-
         output["bleu-4"] = bleu_score.sentence_bleu(
             references=[reference], hypothesis=hypothesis, smoothing_function=chencherry.method1
         )
-
         return output
 
 
@@ -722,13 +703,11 @@ if __name__ == "__main__":
 
             train_state["val_loss"].append(running_loss)
             train_state["val_acc"].append(running_acc)
-
             train_state = update_train_state(args=args, model=model, train_state=train_state)
             scheduler.step(train_state["val_loss"][-1])
 
             if train_state["stop_early"]:
                 break
-
             epoch_bar.set_postfix(best_val=train_state["early_stopping_best_val"])
             epoch_bar.update()
 
