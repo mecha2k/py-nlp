@@ -231,6 +231,9 @@ class NMTDataset(Dataset):
     @classmethod
     def load_dataset_and_make_vectorizer(cls, dataset_csv):
         text_df = pd.read_csv(dataset_csv)
+        print(text_df.info())
+        # text_df = text_df.sample(frac=1)
+        print(text_df.head())
         train_subset = text_df[text_df.split == "train"]
         return cls(text_df, NMTVectorizer.from_dataframe(train_subset))
 
@@ -583,17 +586,17 @@ class NMTSampler:
 
 if __name__ == "__main__":
     args = Namespace(
-        dataset_csv="../data/nmt/simplest_eng_fra.csv",
+        dataset_csv="../data/nmt/eng_fra-large.csv",
         vectorizer_file="vectorizer.json",
         model_state_file="model.pth",
         save_dir="../data/nmt",
-        reload_from_files=False,
+        reload_from_files=True,
         expand_filepath_to_save_dir=True,
         cuda=True,
         seed=42,
         learning_rate=5e-4,
         batch_size=256,
-        num_epochs=1,
+        num_epochs=10,
         early_stopping_criteria=5,
         source_embedding_size=24,
         target_embedding_size=24,
