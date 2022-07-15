@@ -4,7 +4,7 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, Sequentia
 from keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 from transformers import BertModel, BertTokenizer, BertConfig
-from transformers import AdamW, BertForSequenceClassification, get_linear_schedule_with_warmup
+from transformers import BertForSequenceClassification, get_linear_schedule_with_warmup
 from sklearn.metrics import matthews_corrcoef
 from tqdm import tqdm, trange
 import numpy as np
@@ -14,13 +14,12 @@ import io
 
 from transformers import logging
 
-logging.set_verbosity_error()
+# logging.set_verbosity_error()
 
 # [Reference Notebook by Chris McCormick and Nick Ryan]
 # (https://colab.research.google.com/drive/1pTuQhug6Dhl9XalKB0zUGf4FIdYFlpcX)
 # [Reference Article by Chris McCormick and Nick Ryan]
 # (https://mccormickml.com/2019/07/22/BERT-fine-tuning/)
-
 
 # device_name = tf.test.gpu_device_name()
 # if device_name != "/device:GPU:0":
@@ -29,8 +28,8 @@ logging.set_verbosity_error()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"{device} is available in torch")
-# n_gpu = torch.cuda.device_count()
-# print(torch.cuda.get_device_name(0))
+print(torch.cuda.device_count())
+print(torch.cuda.get_device_name(0))
 
 # source of dataset : https://nyu-mll.github.io/CoLA/
 df = pd.read_csv(
@@ -40,7 +39,6 @@ df = pd.read_csv(
     names=["sentence_source", "label", "label_notes", "sentence"],
 )
 print(df.info())
-
 
 sentences = df.sentence.values
 sentences = ["[CLS] " + sentence + " [SEP]" for sentence in sentences]
@@ -125,9 +123,9 @@ optimizer_grouped_parameters = [
 
 
 # Number of training epochs (authors recommend between 2 and 4)
-epochs = 4
+epochs = 1
 
-optimizer = AdamW(optimizer_grouped_parameters, lr=2e-5, eps=1e-8)
+optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=2e-5, eps=1e-8)
 total_steps = len(train_dataloader) * epochs
 scheduler = get_linear_schedule_with_warmup(
     optimizer, num_warmup_steps=0, num_training_steps=total_steps

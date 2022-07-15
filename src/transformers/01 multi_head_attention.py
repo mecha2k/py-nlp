@@ -4,23 +4,39 @@
 import numpy as np
 from scipy.special import softmax
 
-
+# fmt: off
 print("Step 1: Input : 3 inputs, d_model=4")
-x = np.array([[1.0, 0.0, 1.0, 0.0], [0.0, 2.0, 0.0, 2.0], [1.0, 1.0, 1.0, 1.0]])
+x = np.array([
+    [1.0, 0.0, 1.0, 0.0],
+    [0.0, 2.0, 0.0, 2.0],
+    [1.0, 1.0, 1.0, 1.0]])
 print(x)
 
 print("Step 2: weights 3 dimensions x d_model=4")
 print("w_query")
-w_query = np.array([[1, 0, 1], [1, 0, 0], [0, 0, 1], [0, 1, 1]])
+w_query = np.array([
+    [1, 0, 1],
+    [1, 0, 0],
+    [0, 0, 1],
+    [0, 1, 1]])
 print(w_query)
 
 print("w_key")
-w_key = np.array([[0, 0, 1], [1, 1, 0], [0, 1, 0], [1, 1, 0]])
+w_key = np.array([
+    [0, 0, 1],
+    [1, 1, 0],
+    [0, 1, 0],
+    [1, 1, 0]])
 print(w_key)
 
 print("w_value")
-w_value = np.array([[0, 2, 0], [0, 3, 0], [1, 0, 3], [1, 1, 0]])
+w_value = np.array([
+    [0, 2, 0],
+    [0, 3, 0],
+    [1, 0, 3],
+    [1, 1, 0]])
 print(w_value)
+# fmt: on
 
 print("Step 3: Matrix multiplication to obtain Q,K,V")
 print("Queries: x * w_query")
@@ -94,36 +110,36 @@ output_attention = np.hstack((z0h1, z1h2, z2h3, z3h4, z4h5, z5h6, z6h7, z7h8))
 print(output_attention)
 
 # @title Retrieve pipeline of modules and choose English to French translation
-# from transformers import pipeline
+from transformers import pipeline
+
+translator = pipeline("translation_en_to_fr")
+print(translator("It is easy to translate languages with transformers", max_length=40))
+
+
+# import torch
 #
-# translator = pipeline("translation_en_to_fr")
-# print(translator("It is easy to translate languages with transformers", max_length=40))
-
-
-import torch
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Device: {device}")
-
-A = np.arange(12).reshape(4, 3)
-B = np.arange(12).reshape(4, 3)
-print(A @ B.T)
-print(np.matmul(A, B.T))
-print(A.shape, B.shape)
-print(A[:, :, None].shape)
-print(A[:, :, np.newaxis].shape)
-print(A[:, np.newaxis].shape)
-C = np.expand_dims(A, axis=-1)
-print(C.shape)
-D = torch.tensor(A, dtype=torch.float32).to(device)
-D = torch.unsqueeze(D, dim=-1)
-print(D.shape)
-
-z1 = np.random.random((3, 64))
-z2 = np.random.random((3, 64))
-z = np.hstack((z1, z2))
-print(z.shape)
-z = np.vstack((z1, z2))
-print(z.shape)
-z = np.concatenate((z1, z2), axis=1)
-print(z.shape)
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# print(f"Device: {device}")
+#
+# A = np.arange(12).reshape(4, 3)
+# B = np.arange(12).reshape(4, 3)
+# print(A @ B.T)
+# print(np.matmul(A, B.T))
+# print(A.shape, B.shape)
+# print(A[:, :, None].shape)
+# print(A[:, :, np.newaxis].shape)
+# print(A[:, np.newaxis].shape)
+# C = np.expand_dims(A, axis=-1)
+# print(C.shape)
+# D = torch.tensor(A, dtype=torch.float32).to(device)
+# D = torch.unsqueeze(D, dim=-1)
+# print(D.shape)
+#
+# z1 = np.random.random((3, 64))
+# z2 = np.random.random((3, 64))
+# z = np.hstack((z1, z2))
+# print(z.shape)
+# z = np.vstack((z1, z2))
+# print(z.shape)
+# z = np.concatenate((z1, z2), axis=1)
+# print(z.shape)

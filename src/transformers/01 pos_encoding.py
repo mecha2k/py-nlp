@@ -55,7 +55,10 @@ cos_lib = cosine_similarity(aa, ba)
 
 # A Positional Encoding example using one line of basic Python using a few lines of code for the sine and cosine functions.
 # I added a Pytorch method inspired by Pytorch.org to explore these methods.
-# The main idea to keep in mind is that we are looking to add small values to the word embedding output so that the positions are taken into account. This means that as long as the cosine similarity, for example, displayed at the end of the notebook, shows the positions have been taken into account, the method can apply. Depending on the Transformer model, this method can be fine-tuned as well as using other methods.
+# The main idea to keep in mind is that we are looking to add small values to the word embedding output so that
+# the positions are taken into account. This means that as long as the cosine similarity, for example, displayed at the
+# end of the notebook, shows the positions have been taken into account, the method can apply. Depending on the Transformer
+# model, this method can be fine-tuned as well as using other methods.
 
 pe1 = aa.copy()
 pe2 = aa.copy()
