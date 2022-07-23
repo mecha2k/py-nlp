@@ -28,8 +28,8 @@ logging.set_verbosity_error()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"{device} is available in torch")
-# print(torch.cuda.device_count())
-# print(torch.cuda.get_device_name(0))
+print(torch.cuda.device_count())
+print(torch.cuda.get_device_name(0))
 
 # source of dataset : https://nyu-mll.github.io/CoLA/
 df = pd.read_csv(
@@ -91,7 +91,7 @@ configuration = model.config
 print(configuration)
 
 model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
-# model.cuda()
+model.cuda()
 
 
 # This code is taken from:
