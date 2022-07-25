@@ -11,12 +11,15 @@ from transformers import Trainer, TrainingArguments
 from transformers import pipeline
 
 import torch
+import transformers
 from pathlib import Path
+from datasets import load_dataset
 import os
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"{device} is available in torch")
+print("transformers : ", transformers.__version__)
 
 paths = [str(x) for x in Path("../data/transformers/Kantai").glob("**/*.txt")]
 paths = "../data/transformers/Kantai/kant.txt"
@@ -40,14 +43,14 @@ tokenizer.train(
 token_dir = "../data/transformers/Kantai/models/"
 if not os.path.exists(token_dir):
     os.makedirs(token_dir)
-tokenizer.save_model(directory=token_dir, prefix="KantaiBERT")
+tokenizer.save_model(directory=token_dir)
 
-tokenizer = ByteLevelBPETokenizer(
-    vocab=token_dir + "KantaiBERT-vocab.json", merges=token_dir + "KantaiBERT-merges.txt"
-)
+tokenizer = ByteLevelBPETokenizer(vocab=token_dir + "vocab.json", merges=token_dir + "merges.txt")
 print(tokenizer.encode("The Critique of Pure Reason."))
 print(tokenizer.encode("The Critique of Pure Reason.").tokens)
 
+print(tokenizer.encode("The Tokenizer."))
+print(tokenizer.token_to_id("er"))
 
 tokenizer._tokenizer.post_processor = BertProcessing(
     ("</s>", tokenizer.token_to_id("</s>")),
@@ -63,48 +66,37 @@ config = RobertaConfig(
     num_hidden_layers=6,
     type_vocab_size=1,
 )
+config.to_json_file(token_dir + "config.json")
 print(config)
 
 
-tokenizer = RobertaTokenizer.from_pretrained("KantaiBERT", max_length=512)
+tokenizer = RobertaTokenizer.from_pretrained(token_dir, max_length=512)
 model = RobertaForMaskedLM(config=config)
 print(model)
-print(model.num_parameters())
+print("total parameters : ", model.num_parameters())
 
-LP = list(model.parameters())
-lp = len(LP)
-print(lp)
-for p in range(0, lp):
-    print(LP[p])
-
-np = 0
-for p in range(0, lp):  # number of tensors
-    PL2 = True
+num_params = 0
+params = list(model.parameters())
+for param in params:
     try:
-        L2 = len(LP[p][0])  # check if 2D
-    except:
-        L2 = 1  # not 2D but 1D
-        PL2 = False
-    L1 = len(LP[p])
-    L3 = L1 * L2
-    np += L3  # number of parameters per tensor
-    if PL2:
-        print(p, L1, L2, L3)  # displaying the sizes of the parameters
-    if not PL2:
-        print(p, L1, L3)  # displaying the sizes of the parameters
-print(np)  # total number of parameters
+        L2 = len(param[0])
+    except TypeError:
+        L2 = 1
+    num_params += len(param) * L2
+print("total parameters : ", num_params)
 
+
+# dataset = load_dataset("text", data_files="../data/transformers/Kantai/kant.txt")
 
 dataset = LineByLineTextDataset(
     tokenizer=tokenizer,
-    file_path="./kant.txt",
+    file_path="../data/transformers/Kantai/kant.txt",
     block_size=128,
 )
 
 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, mlm_probability=0.15)
-
 training_args = TrainingArguments(
-    output_dir="./KantaiBERT",
+    output_dir=token_dir,
     overwrite_output_dir=True,
     num_train_epochs=1,
     per_device_train_batch_size=64,
@@ -118,8 +110,9 @@ trainer = Trainer(
     data_collator=data_collator,
     train_dataset=dataset,
 )
-trainer.train()
-trainer.save_model("./KantaiBERT")
 
-fill_mask = pipeline("fill-mask", model="./KantaiBERT", tokenizer="./KantaiBERT")
+trainer.train()
+trainer.save_model(token_dir, overwrite=True)
+
+fill_mask = pipeline("fill-mask", model=token_dir, tokenizer=token_dir)
 print(fill_mask("Human thinking involves<mask>."))
