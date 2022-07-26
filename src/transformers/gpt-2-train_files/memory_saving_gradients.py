@@ -372,7 +372,7 @@ def capture_ops():
     print(ops) # => prints ops created.
     """
 
-    micros = int(time.time() * 10 ** 6)
+    micros = int(time.time() * 10**6)
     scope_name = str(micros)
     op_list = []
     with tf.name_scope(scope_name):
