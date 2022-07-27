@@ -7,14 +7,10 @@
 import nltk
 import gensim
 import numpy as np
-import pickle
-import math
-import matplotlib.pyplot as plt
 import warnings
 from nltk.tokenize import sent_tokenize, word_tokenize
 from gensim.models import Word2Vec
 from sklearn.metrics.pairwise import cosine_similarity
-from tqdm import tqdm
 
 
 nltk.download("punkt")
@@ -26,7 +22,7 @@ warnings.filterwarnings(action="ignore")
 # print(len(sample))
 #
 # sentences = []
-# for sentence in tqdm(sent_tokenize(sample)):
+# for sentence in sent_tokenize(sample):
 #     sentences.append([word.lower() for word in word_tokenize(sentence)])
 # sentences = np.array(sentences)
 # np.save("../data/transformers/sentences.npy", sentences)
