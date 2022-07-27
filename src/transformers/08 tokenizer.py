@@ -60,29 +60,30 @@ def word_similarity(model, word1, word2):
     return cosine_similarity(word1.reshape(1, -1), word2.reshape(1, -1))[0][0]
 
 
-# @title Case 0: Words in text and dictionary
 word1, word2 = "freedom", "liberty"
+print("Case 0: Words in text and dictionary")
 print("Similarity", word_similarity(skip_gram, word1, word2), word1, word2)
 
-# @title Word(s) Case 1: Word not in text or dictionary
 word1, word2 = "corporations", "rights"
+print("Case 1: Word not in text or dictionary")
 print("Similarity", word_similarity(skip_gram, word1, word2), word1, word2)
 
-# @title Case 2: Noisy Relationship
 word1, word2 = "etext", "declaration"
+print("Case 2: Noisy Relationship")
 print("Similarity", word_similarity(skip_gram, word1, word2), word1, word2)
 
-# @title Case 3: Rare words
 word1, word2 = "justiciar", "judgement"
+print("Case 3: Rare words")
 print("Similarity", word_similarity(skip_gram, word1, word2), word1, word2)
 
-# @title Case 4: Replacing words
 word1, word2 = "judge", "judgement"
+print("Case 4: Replacing words")
 print("Similarity", word_similarity(skip_gram, word1, word2), word1, word2)
 
 word1, word2 = "justiciar", "judge"
+print("Case 4: Replacing words")
 print("Similarity", word_similarity(skip_gram, word1, word2), word1, word2)
 
-# @title Case 5: Entailment
 word1, word2 = "pay", "debt"
+print("Case 5: Entailment")
 print("Similarity", word_similarity(skip_gram, word1, word2), word1, word2)
