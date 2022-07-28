@@ -30,7 +30,7 @@ class SimpleRNN(nn.Module):
             batch_first=True,
             bidirectional=True,
         )
-        self.generator = nn.Linear(hidden_size * 2, n_classes)
+        self.generator = nn.Linear(hidden_size * 2, num_classes)
         self.activation = nn.LogSoftmax(dim=-1)
 
     def forward(self, x):
