@@ -74,7 +74,7 @@ Now, you have 240,000 samples for train-set, and 62,680 samples for valid-set. N
 Below is the example command for training. You can select your own hyper-parameter values via argument inputs.
 
 ```bash
-python train.py --model_fn ./models/model.pth --train ./data/corpus.train.txt --valid ./data/corpus.valid.txt --rnn --cnn --gpu_id 0
+python train.py --model_fn ./tf-models/model.pth --train ./data/corpus.train.txt --valid ./data/corpus.valid.txt --rnn --cnn --gpu_id 0
 ```
 
 Note that you need to specify an architecture for training. You can select both rnn and cnn for ensemble method. Also, you can select the device to use for training. In order to use CPU only, you can put -1 for '--gpu_id' argument, which is default value.
@@ -99,7 +99,7 @@ or you can check default hyper-parameter from train.py.
 You can feed standard input as input for inference, like as below. Prediction result consists of two columns(top-k classes and input sentence) with tab delimiter. The result will be shown as standard output.
 
 ```bash
-$ head ./data/review.sorted.uniq.refined.tok.shuf.test.tsv | awk -F'\t' '{ print $2 }' | python classify.py --model ./models/model.pth --gpu_id -1 --top_k 1
+$ head ./data/review.sorted.uniq.refined.tok.shuf.test.tsv | awk -F'\t' '{ print $2 }' | python classify.py --model ./tf-models/model.pth --gpu_id -1 --top_k 1
 positive	생각 보다 밝 아요 ㅎㅎ
 negative	쓸 대 가 없 네요
 positive	깔 금 해요 . 가벼워 요 . 설치 가 쉬워요 . 타 사이트 에 비해 가격 도 저렴 하 답니다 .

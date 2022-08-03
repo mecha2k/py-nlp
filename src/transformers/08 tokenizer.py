@@ -28,7 +28,7 @@ warnings.filterwarnings(action="ignore")
 # np.save("../data/transformers/sentences.npy", sentences)
 # print(sentences.shape)
 
-# skip_gram = gensim.models.Word2Vec(sentences, min_count=1, vector_size=512, window=5, sg=1)
+# skip_gram = gensim.tf-models.Word2Vec(sentences, min_count=1, vector_size=512, window=5, sg=1)
 # skip_gram.save("../data/transformers/skip_gram.model")
 # print(skip_gram)
 

@@ -30,7 +30,7 @@ for i in sent_tokenize(f):
     data.append(temp)
 
 # Creating Skip Gram model
-# model2 = gensim.models.Word2Vec(data, min_count = 1, size = 512,window = 5, sg = 1)
+# model2 = gensim.tf-models.Word2Vec(data, min_count = 1, size = 512,window = 5, sg = 1)
 # model = Word2Vec(sentences=common_texts, vector_size=100, window=5, min_count=1, workers=4)
 model2 = gensim.models.Word2Vec(data, min_count=1, vector_size=512, window=5, sg=1)
 

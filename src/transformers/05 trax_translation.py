@@ -5,7 +5,7 @@ import os
 import numpy as np
 import trax
 
-# Pre-trained model config in gs://trax-ml/models/translation/ende_wmt32k.gin
+# Pre-trained model config in gs://trax-ml/tf-models/translation/ende_wmt32k.gin
 model = trax.models.Transformer(
     input_vocab_size=33300,
     d_model=512,
@@ -18,7 +18,7 @@ model = trax.models.Transformer(
 )
 
 # @title Initializing the model using pre-trained weights
-model.init_from_file("gs://trax-ml/models/translation/ende_wmt32k.pkl.gz", weights_only=True)
+model.init_from_file("gs://trax-ml/tf-models/translation/ende_wmt32k.pkl.gz", weights_only=True)
 
 # @title Tokenizing a sentence
 sentence = "I am only a machine but I have machine intelligence."

@@ -120,4 +120,4 @@ def interact_model(model_name, seed, nsamples, batch_size, length, temperature, 
 
 
 # @title Step 9: Interacting with GPT-2
-interact_model("345M", None, 1, 1, 300, 1, 0, "/content/gpt-2/models")
+interact_model("345M", None, 1, 1, 300, 1, 0, "/content/gpt-2/tf-models")
