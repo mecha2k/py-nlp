@@ -1,17 +1,17 @@
-import os
-
 import numpy as np
 import pandas as pd
-
 import torch
 import torch.nn as nn
+from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader
 from transformers import GPT2LMHeadModel, GPT2TokenizerFast
-from transformers import AdamW, get_scheduler, get_cosine_schedule_with_warmup
+from transformers import get_scheduler, get_cosine_schedule_with_warmup
 from transformers.utils import logging
 from tqdm import tqdm
+import os
 
-logging.set_verbosity_error()
+
+# logging.set_verbosity_error()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"{device} is available in torch")
 
@@ -19,7 +19,7 @@ print(f"{device} is available in torch")
 max_len = 32
 negative = -1e18
 
-epochs = 3
+epochs = 1
 batch_size = 64
 learning_rate = 5e-5
 warmup_ratio = 0.1
@@ -118,7 +118,12 @@ print(df["sentiment"].value_counts())
 train_dataset = ChatDataset(df, tokenizer, max_len=max_len)
 train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-model = GPT2LMHeadModel.from_pretrained("skt/kogpt2-base-v2")
+if os.path.exists(model_file):
+    model = torch.load(model_file)
+    print("model loaded from", model_file)
+else:
+    model = GPT2LMHeadModel.from_pretrained("skt/kogpt2-base-v2")
+    print("custom model not found, 'kogpt2-base-v2' model will be used")
 model.to(device)
 
 loss_fn = nn.CrossEntropyLoss(reduction="none")
@@ -140,34 +145,35 @@ optimizer_grouped_parameters = [
         "weight_decay": 0.0,
     },
 ]
-optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate, correct_bias=False)
+optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate)
 num_training_steps = epochs * len(train_dataloader)
 num_warmup_steps = int(num_training_steps * warmup_ratio)
 lr_scheduler = get_cosine_schedule_with_warmup(
     optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps
 )
 
-sample_dataset = next(iter(train_dataloader))
-print(sample_dataset["input_ids"][0])
-print(sample_dataset["masks"][0])
-print(sample_dataset["label_ids"][0])
-print(tokenizer.decode(sample_dataset["input_ids"][0]))
-print(tokenizer.decode(sample_dataset["masks"][0]))
-print(tokenizer.decode(sample_dataset["label_ids"][0]))
-print(sample_dataset["input_ids"].shape)
-
-outputs = model(sample_dataset["input_ids"], return_dict=True)
-outputs = outputs.logits
-masks_3d = (
-    sample_dataset["masks"].unsqueeze(dim=2).repeat_interleave(repeats=outputs.shape[2], dim=2)
-)
-masks_out = torch.where(masks_3d == 1, outputs, negative * torch.ones_like(outputs))
-loss = loss_fn(masks_out.transpose(1, 2), sample_dataset["label_ids"])
-loss = loss.sum() / sample_dataset["masks"].sum()
-print(sample_dataset["masks"])
-print(sample_dataset["masks"].sum())
-print(loss)
-print(outputs.shape)
+# sample_dataset = next(iter(train_dataloader))
+# sample_dataset = {k: v.to(device) for k, v in sample_dataset.items()}
+# print(sample_dataset["input_ids"][0])
+# print(sample_dataset["masks"][0])
+# print(sample_dataset["label_ids"][0])
+# print(tokenizer.decode(sample_dataset["input_ids"][0]))
+# print(tokenizer.decode(sample_dataset["masks"][0]))
+# print(tokenizer.decode(sample_dataset["label_ids"][0]))
+# print(sample_dataset["input_ids"].shape)
+#
+# outputs = model(sample_dataset["input_ids"], return_dict=True)
+# outputs = outputs.logits
+# masks_3d = (
+#     sample_dataset["masks"].unsqueeze(dim=2).repeat_interleave(repeats=outputs.shape[2], dim=2)
+# )
+# masks_out = torch.where(masks_3d == 1, outputs, negative * torch.ones_like(outputs))
+# loss = loss_fn(masks_out.transpose(1, 2), sample_dataset["label_ids"])
+# loss = loss.sum() / sample_dataset["masks"].sum()
+# print(sample_dataset["masks"])
+# print(sample_dataset["masks"].sum())
+# print(loss)
+# print(outputs.shape)
 
 model.train()
 for epoch in tqdm(range(epochs)):
@@ -185,7 +191,7 @@ for epoch in tqdm(range(epochs)):
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
-        if step % 10 == 0:
+        if step % 100 == 0:
             print(f"[epoch: {epoch:02d}, step: {step:5d}], loss = {loss:9.3f}", end="\n")
 
 torch.save(model, model_file)

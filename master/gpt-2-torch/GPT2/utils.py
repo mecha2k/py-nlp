@@ -1,11 +1,12 @@
-'''
+"""
     code by TaeHwan Jung(@graykode)
     Original Paper and repository here : https://github.com/openai/gpt-2
     GPT2 Pytorch Model : https://github.com/huggingface/pytorch-pretrained-BERT
-'''
+"""
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 def load_weight(model, state_dict):
     old_keys = []
@@ -43,7 +44,9 @@ def load_weight(model, state_dict):
                 load(child, prefix + name + ".")
 
     start_model = model
-    if hasattr(model, "transformer") and all(not s.startswith('transformer.') for s in state_dict.keys()):
+    if hasattr(model, "transformer") and all(
+        not s.startswith("transformer.") for s in state_dict.keys()
+    ):
         start_model = model.transformer
     load(start_model, prefix="")
 
