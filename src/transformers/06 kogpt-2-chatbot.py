@@ -93,9 +93,8 @@ def chatbot():
                 answer_new = tokenizer.decode(output[0], skip_special_tokens=True)
                 idx = torch.where(output[0] == tokenizer.encode("<sys>")[0])
                 chatbot = tokenizer.decode(output[0][int(idx[0]) + 1 :], skip_special_tokens=True)
-                print(f"챗봇 > {chatbot.strip()}")
-            else:
-                print(f"챗봇 > {chatbot.strip()}")
+
+            print(f"챗봇 > {chatbot.strip()}")
 
 
 if __name__ == "__main__":
