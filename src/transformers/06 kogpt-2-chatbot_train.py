@@ -113,6 +113,7 @@ df = pd.read_csv("../data/gpt-2/chatbot_dataset.csv")
 df.drop_duplicates(subset=["user", "system"], inplace=True)
 df.dropna(subset=["user", "system"], how="any", inplace=True)
 print(df.info())
+print(df["sentiment"].value_counts())
 
 train_dataset = ChatDataset(df, tokenizer, max_len=max_len)
 train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -146,24 +147,27 @@ lr_scheduler = get_cosine_schedule_with_warmup(
     optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps
 )
 
-# dataset = next(iter(train_dataloader))
-# print(tokenizer.decode(dataset["input_ids"][0]))
-# print(tokenizer.decode(dataset["label_ids"][0]))
-# print(tokenizer.decode(dataset["masks"][0]))
-# print(dataset["input_ids"].shape)
-#
-# outputs = model(dataset["input_ids"], return_dict=True)
-# masks_3d = (
-#     dataset["masks"].unsqueeze(dim=2).repeat_interleave(repeats=outputs.logits.shape[2], dim=2)
-# )
-# masks_out = torch.where(masks_3d == 1, outputs.logits, negative * torch.ones_like(outputs.logits))
-# loss = loss_fn(masks_out.transpose(2, 1), dataset["label_ids"])
-# loss = loss.sum() / dataset["masks"].sum()
-# print(dataset["masks"])
-# print(dataset["masks"].sum())
-# print(loss)
-# print(outputs.logits.shape)
-# print(outputs["logits"].shape)
+sample_dataset = next(iter(train_dataloader))
+print(sample_dataset["input_ids"][0])
+print(sample_dataset["masks"][0])
+print(sample_dataset["label_ids"][0])
+print(tokenizer.decode(sample_dataset["input_ids"][0]))
+print(tokenizer.decode(sample_dataset["masks"][0]))
+print(tokenizer.decode(sample_dataset["label_ids"][0]))
+print(sample_dataset["input_ids"].shape)
+
+outputs = model(sample_dataset["input_ids"], return_dict=True)
+outputs = outputs.logits
+masks_3d = (
+    sample_dataset["masks"].unsqueeze(dim=2).repeat_interleave(repeats=outputs.shape[2], dim=2)
+)
+masks_out = torch.where(masks_3d == 1, outputs, negative * torch.ones_like(outputs))
+loss = loss_fn(masks_out.transpose(1, 2), sample_dataset["label_ids"])
+loss = loss.sum() / sample_dataset["masks"].sum()
+print(sample_dataset["masks"])
+print(sample_dataset["masks"].sum())
+print(loss)
+print(outputs.shape)
 
 model.train()
 for epoch in tqdm(range(epochs)):
@@ -176,7 +180,7 @@ for epoch in tqdm(range(epochs)):
             batch["masks"].unsqueeze(dim=2).repeat_interleave(repeats=outputs.shape[2], dim=2)
         )
         masks_out = torch.where(masks_3d == 1, outputs, negative * torch.ones_like(outputs))
-        loss = loss_fn(masks_out.transpose(2, 1), batch["label_ids"])
+        loss = loss_fn(masks_out.transpose(1, 2), batch["label_ids"])
         loss = loss.sum() / batch["masks"].sum()
         loss.backward()
         optimizer.step()

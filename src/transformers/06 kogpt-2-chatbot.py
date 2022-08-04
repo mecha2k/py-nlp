@@ -1,17 +1,8 @@
-import os
-
-import numpy as np
-import pandas as pd
-
 import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+import os
 from transformers import GPT2LMHeadModel, GPT2TokenizerFast
-from transformers import AdamW, get_scheduler, get_cosine_schedule_with_warmup
-from transformers.utils import logging
-from tqdm import tqdm
 
-logging.set_verbosity_error()
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"{device} is available in torch")
 
@@ -33,30 +24,21 @@ tokenizer = GPT2TokenizerFast.from_pretrained(
     mask_token=mask_token,
 )
 print("vocab size : ", len(tokenizer.get_vocab()))
-print(tokenizer.all_special_tokens)
-print([tokenizer.decode(i) for i in range(10)])
 
 
-model_file = "../data/gpt-2/py-models/kogpt2_chatbot_model.pt"
-if os.path.exists(model_file):
-    model = torch.load(model_file)
+def chatbot(model):
     model.to(device)
     model.eval()
-    print("model loaded from", model_file)
-else:
-    print("model not found")
-    exit(1)
-
-
-def chatbot():
     with torch.no_grad():
         question_hist = []
-        while 1:
-            question = input("나 > ").strip()
-            question_hist.append(q)
+        while True:
+            # question = input("나 > ").strip()
+            # question_hist.append(question)
+            # if question == "quit":
+            #     break
+            question = "고민이 많다"
+            print("나 > ", question)
 
-            if question == "quit":
-                break
             answer = ""
             user = usr_token + question + sent_token + answer
             encoded = tokenizer.encode(user)
@@ -70,8 +52,10 @@ def chatbot():
                 no_repeat_ngram_size=2,
                 temperature=0.85,
             )
+            print(output[0])
             answer = tokenizer.decode(output[0])
             idx = torch.where(output[0] == tokenizer.encode("<sys>")[0])
+            idx = torch.where(output[0] == tokenizer.encode("</d>")[0])
             chatbot = tokenizer.decode(output[0][int(idx[0]) + 1 :], skip_special_tokens=True)
 
             if "답변" in answer:  # 응, 아니 등이 input으로 들어왔을 때
@@ -98,4 +82,12 @@ def chatbot():
 
 
 if __name__ == "__main__":
-    chatbot()
+    model_file = "../data/gpt-2/py-models/kogpt2_chatbot_model.pt"
+    if os.path.exists(model_file):
+        model = torch.load(model_file)
+        print("model loaded from", model_file)
+    else:
+        model = GPT2LMHeadModel.from_pretrained("skt/kogpt2-base-v2")
+        print("model not found, original model is used")
+
+    chatbot(model)
