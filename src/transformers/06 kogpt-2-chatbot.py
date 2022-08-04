@@ -52,10 +52,10 @@ def chatbot(model):
                 no_repeat_ngram_size=2,
                 temperature=0.85,
             )
-            print(output[0])
             answer = tokenizer.decode(output[0])
+            print(answer)
             idx = torch.where(output[0] == tokenizer.encode("<sys>")[0])
-            idx = torch.where(output[0] == tokenizer.encode("</d>")[0])
+            # idx = torch.where(output[0] == tokenizer.encode("</d>")[0])
             chatbot = tokenizer.decode(output[0][int(idx[0]) + 1 :], skip_special_tokens=True)
 
             if "답변" in answer:  # 응, 아니 등이 input으로 들어왔을 때
@@ -75,6 +75,7 @@ def chatbot(model):
                     temperature=0.85,
                 )
                 answer_new = tokenizer.decode(output[0], skip_special_tokens=True)
+                print(answer_new)
                 idx = torch.where(output[0] == tokenizer.encode("<sys>")[0])
                 chatbot = tokenizer.decode(output[0][int(idx[0]) + 1 :], skip_special_tokens=True)
 
