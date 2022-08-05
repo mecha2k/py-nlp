@@ -112,6 +112,7 @@ def _collate_fn(batch):
 df = pd.read_csv("../data/gpt-2/chatbot_dataset.csv")
 df.drop_duplicates(subset=["user", "system"], inplace=True)
 df.dropna(subset=["user", "system"], how="any", inplace=True)
+df = df[:1000]
 print(df.info())
 print(df["sentiment"].value_counts())
 
@@ -152,15 +153,21 @@ lr_scheduler = get_cosine_schedule_with_warmup(
     optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps
 )
 
+
+# from icecream import ic
+#
 # sample_dataset = next(iter(train_dataloader))
 # sample_dataset = {k: v.to(device) for k, v in sample_dataset.items()}
-# print(sample_dataset["input_ids"][0])
-# print(sample_dataset["masks"][0])
-# print(sample_dataset["label_ids"][0])
-# print(tokenizer.decode(sample_dataset["input_ids"][0]))
-# print(tokenizer.decode(sample_dataset["masks"][0]))
-# print(tokenizer.decode(sample_dataset["label_ids"][0]))
-# print(sample_dataset["input_ids"].shape)
+# ic(sample_dataset["input_ids"][0])
+# ic(sample_dataset["masks"][0])
+# ic(sample_dataset["label_ids"][0])
+# ic(tokenizer.decode(sample_dataset["input_ids"][0]))
+# ic(tokenizer.decode(sample_dataset["masks"][0]))
+# masked_inputs = torch.where(sample_dataset["masks"][0] == 1, sample_dataset["input_ids"][0], 0)
+# ic(masked_inputs)
+# ic(tokenizer.decode(masked_inputs))
+# ic(tokenizer.decode(sample_dataset["label_ids"][0]))
+# ic(sample_dataset["input_ids"].shape)
 #
 # outputs = model(sample_dataset["input_ids"], return_dict=True)
 # outputs = outputs.logits
@@ -170,10 +177,38 @@ lr_scheduler = get_cosine_schedule_with_warmup(
 # masks_out = torch.where(masks_3d == 1, outputs, negative * torch.ones_like(outputs))
 # loss = loss_fn(masks_out.transpose(1, 2), sample_dataset["label_ids"])
 # loss = loss.sum() / sample_dataset["masks"].sum()
-# print(sample_dataset["masks"])
-# print(sample_dataset["masks"].sum())
-# print(loss)
-# print(outputs.shape)
+# ic(sample_dataset["masks"])
+# ic(sample_dataset["masks"].sum())
+# ic(loss)
+# ic(outputs.shape)
+#
+#
+# max_len = 8
+# inputs = torch.zeros(size=(1, max_len), dtype=torch.long).to(device)
+# inputs[0, 2:5] = torch.tensor([3, 4, 5])
+# ic(inputs)
+# masks = torch.zeros(size=(1, max_len), dtype=torch.long).to(device)
+# masks[0, 2:5] = 1
+# ic(masks)
+# labels = torch.randint(low=0, high=1000, size=(1, max_len), dtype=torch.long).to(device)
+# ic(labels)
+# outputs = model(inputs, return_dict=True).logits
+# outputs = outputs[:, :, :4]
+# ic(outputs.shape)
+# mask_3d = masks.unsqueeze(dim=2)
+# ic(mask_3d)
+# mask_3d = mask_3d.repeat_interleave(repeats=outputs.shape[2], dim=2)
+# ic(mask_3d)
+# ic(outputs[0, 0, :])
+# ic(mask_3d.sum())
+# mask_out = torch.where(mask_3d == 1, outputs, negative * torch.ones_like(outputs))
+# ic(mask_out)
+# ic(mask_out.shape)
+# ic(mask_out.transpose(1, 2).shape)
+# ic(labels.shape)
+# loss = loss_fn(mask_out.transpose(1, 2), labels)
+# ic(loss)
+
 
 model.train()
 for epoch in tqdm(range(epochs)):
