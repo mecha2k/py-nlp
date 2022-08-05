@@ -8,6 +8,7 @@ from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 from transformers import get_scheduler, get_cosine_schedule_with_warmup
 from transformers.utils import logging
 from tqdm import tqdm
+from icecream import ic
 import os
 
 
@@ -101,14 +102,6 @@ class ChatDataset(Dataset):
         }
 
 
-def _collate_fn(batch):
-    input_ids, masks, label_ids = zip(*batch)
-    input_ids = torch.tensor(input_ids, dtype=torch.long)
-    masks = torch.tensor(masks, dtype=torch.long)
-    label_ids = torch.tensor(label_ids, dtype=torch.long)
-    return input_ids, masks, label_ids
-
-
 df = pd.read_csv("../data/gpt-2/chatbot_dataset.csv")
 df.drop_duplicates(subset=["user", "system"], inplace=True)
 df.dropna(subset=["user", "system"], how="any", inplace=True)
@@ -154,24 +147,103 @@ lr_scheduler = get_cosine_schedule_with_warmup(
 )
 
 
-model.train()
-for epoch in tqdm(range(epochs)):
-    for step, batch in enumerate(train_dataloader):
-        optimizer.zero_grad()
-        batch = {k: v.to(device) for k, v in batch.items()}
-        outputs = model(batch["input_ids"], return_dict=True)
-        outputs = outputs.logits
-        masks_3d = (
-            batch["masks"].unsqueeze(dim=2).repeat_interleave(repeats=outputs.shape[2], dim=2)
-        )
-        masks_out = torch.where(masks_3d == 1, outputs, negative * torch.ones_like(outputs))
-        loss = loss_fn(masks_out.transpose(1, 2), batch["label_ids"])
-        loss = loss.sum() / batch["masks"].sum()
-        loss.backward()
-        optimizer.step()
-        lr_scheduler.step()
-        if step % 100 == 0:
-            print(f"[epoch: {epoch:02d}, step: {step:5d}], loss = {loss:9.3f}", end="\n")
+sample_dataset = next(iter(train_dataloader))
+sample_dataset = {k: v.to(device) for k, v in sample_dataset.items()}
+ic(sample_dataset["input_ids"][0])
+ic(sample_dataset["masks"][0])
+ic(sample_dataset["label_ids"][0])
+ic(tokenizer.decode(sample_dataset["input_ids"][0]))
+ic(tokenizer.decode(sample_dataset["masks"][0]))
+masked_inputs = torch.where(sample_dataset["masks"][0] == 1, sample_dataset["input_ids"][0], 0)
+ic(masked_inputs)
+ic(tokenizer.decode(masked_inputs))
+ic(tokenizer.decode(sample_dataset["label_ids"][0]))
+ic(sample_dataset["input_ids"].shape)
 
-torch.save(model, model_file)
-print("model saved to", model_file)
+outputs = model(sample_dataset["input_ids"], return_dict=True)
+outputs = outputs.logits
+masks_3d = (
+    sample_dataset["masks"].unsqueeze(dim=2).repeat_interleave(repeats=outputs.shape[2], dim=2)
+)
+masks_out = torch.where(masks_3d == 1, outputs, negative * torch.ones_like(outputs))
+loss = loss_fn(masks_out.transpose(1, 2), sample_dataset["label_ids"])
+loss = loss.sum() / sample_dataset["masks"].sum()
+ic(sample_dataset["masks"])
+ic(sample_dataset["masks"].sum())
+ic(loss)
+ic(outputs.shape)
+
+
+torch.manual_seed(seed=42)
+
+batch_size = 1
+max_len = 12
+num_classes = 8
+
+inputs = torch.zeros(size=(batch_size, max_len), dtype=torch.long).to(device)
+inputs[0, 2:5] = torch.tensor([3, 4, 5])
+ic(inputs)
+masks = torch.zeros(size=(batch_size, max_len), dtype=torch.long).to(device)
+masks[0, 2:5] = 1
+ic(masks)
+labels = torch.randint(low=0, high=num_classes, size=(batch_size, max_len), dtype=torch.long).to(
+    device
+)
+ic(labels)
+outputs = model(inputs, return_dict=True).logits
+outputs = outputs[:, :, :num_classes]
+ic(outputs.shape)
+mask_3d = masks.unsqueeze(dim=2)
+ic(mask_3d)
+mask_3d = mask_3d.repeat_interleave(repeats=outputs.shape[2], dim=2)
+ic(mask_3d)
+ic(outputs[0, 0, :])
+ic(mask_3d.sum())
+mask_out = torch.where(mask_3d == 1, outputs, negative * torch.ones_like(outputs))
+ic(mask_out)
+ic(mask_out.shape)
+ic(mask_out.transpose(1, 2).shape)
+ic(labels.shape)
+loss = loss_fn(mask_out.transpose(1, 2), labels)
+ic(loss)
+
+
+output = [0.8982, 0.805, 0.6393, 0.9983, 0.5731, 0.0469, 0.556, 0.1476, 0.8404, 0.5544]
+output = [-1e20] * 10
+output[1] = 0.805
+output = torch.tensor(output, dtype=torch.float32)
+target = torch.tensor([1], dtype=torch.long)
+loss1 = torch.log(torch.sum(torch.exp(output))) - output[target[0]]
+output = [0.9457, 0.0195, 0.9846, 0.3231, 0.1605, 0.3143, 0.9508, 0.2762, 0.7276, 0.4332]
+output = torch.tensor(output, dtype=torch.float32)
+target = torch.tensor([5], dtype=torch.long)
+loss2 = torch.log(torch.sum(torch.exp(output))) - output[target[0]]
+ic(loss1)
+ic(loss2)
+ic((loss1 + loss2) / 2)
+
+
+# ic| inputs: tensor([[0, 0, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
+# ic| masks: tensor([[0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
+# ic| labels: tensor([[6, 3, 4, 6, 2, 7, 4, 4, 6, 1, 2, 6]], device='cuda:0')
+outputs[:, :, :] = -1e20
+ic(outputs.shape)
+outputs[0, 2, 4] = torch.tensor(1.5)
+outputs[0, 3, 6] = torch.tensor(6.5)
+outputs[0, 4, 2] = torch.tensor(2.8)
+ic(outputs[0, 2, :])
+ic(outputs)
+
+mask_3d = masks.unsqueeze(dim=2).repeat_interleave(repeats=outputs.shape[2], dim=2)
+ic(mask_3d)
+mask_out = torch.where(mask_3d == 1, outputs, negative * torch.ones_like(outputs))
+ic(mask_out)
+loss = loss_fn(mask_out.transpose(1, 2), labels)
+ic(loss)
+
+ic(mask_out.shape)
+mask_out[0, 0, 6] = torch.tensor(1.5)
+ic(mask_out[0, 0, :])
+ic(labels[0, 0])
+loss1 = loss_fn(mask_out[0, 0], labels[0, 0])
+ic(loss1)
