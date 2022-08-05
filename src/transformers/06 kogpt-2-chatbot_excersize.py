@@ -247,3 +247,10 @@ ic(mask_out[0, 0, :])
 ic(labels[0, 0])
 loss1 = loss_fn(mask_out[0, 0], labels[0, 0])
 ic(loss1)
+
+sample = outputs[0, 0, :]
+sample[6] = 0.3
+ic(sample)
+softmax = nn.Softmax(dim=0)
+ic(softmax(sample))
+ic(torch.argmax(softmax(sample), dim=0).item())
