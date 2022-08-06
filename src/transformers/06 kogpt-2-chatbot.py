@@ -76,13 +76,15 @@ def chatbot(model, user_inputs=None):
 
 
 if __name__ == "__main__":
-    model_file = "../data/gpt-2/py-models/kogpt2_chatbot_model.pt"
-    if os.path.exists(model_file):
-        model = torch.load(model_file)
-        print("model loaded from", model_file)
-    else:
-        model = GPT2LMHeadModel.from_pretrained("skt/kogpt2-base-v2")
-        print("model not found, original model is used")
+    # model_file = "../data/gpt-2/py-models/kogpt2_chatbot_model.pt"
+    # if os.path.exists(model_file):
+    #     model = torch.load(model_file)
+    #     print("model loaded from", model_file)
+    # else:
+    #     model = GPT2LMHeadModel.from_pretrained("skt/kogpt2-base-v2")
+    #     print("model not found, original model is used")
+
+    model = GPT2LMHeadModel.from_pretrained("../data/gpt-2/py-models/kogpt2-chatbot-v1")
 
     user_inputs = [
         "고민이 많다",
