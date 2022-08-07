@@ -14,15 +14,9 @@ print(transformers.__version__)
 
 model = T5ForConditionalGeneration.from_pretrained("t5-large")
 tokenizer = T5Tokenizer.from_pretrained("t5-large")
-device = torch.device("cpu")
-
-display_architecture = False
-if display_architecture:
-    print(model.config)
-    print(model)
-    print(model.encoder)
-    print(model.decoder)
-    print(model.forward)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"{device} is available in torch")
+print(model.config)
 
 
 def summarize(text, ml):
