@@ -44,7 +44,7 @@ def summarize(text, ml):
 
 with open("../data/transformers/sample_text.txt", mode="r", encoding="utf-8") as file:
     lines = file.readlines()
-print(len(lines))
+print("samples : ", len(lines))
 
 for line in lines:
     print("Number of characters:", len(line), end="\n")
