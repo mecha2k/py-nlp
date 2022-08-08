@@ -18,6 +18,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"{device} is available in torch")
 print(model.config)
 
+print(tokenizer.encode("summarize: "))
+print(tokenizer.decode(tokenizer.encode("summarize: ")))
+
 
 def summarize(text, ml):
     preprocess_text = text.strip().replace("\n", "")
