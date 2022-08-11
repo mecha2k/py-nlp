@@ -16,35 +16,24 @@ def preprocess_data(section):
         print("name : ", json_data["name"])
         print("delivery_date : ", json_data["delivery_date"])
         data = json_data["documents"]
-        # data = data[:10000]
         np.save(data_file, data)
 
     sample_len = len(data)
     print(f"document samples : {sample_len:,}")
 
     def process_json(data):
-        sentences = data["text"]
-        article = [sent[0]["sentence"] for sent in sentences if sent]
-        article = " ".join(article)
-        extractive = ""
-        for idx in data["extractive"]:
-            for sent in sentences:
-                if sent and sent[0]["index"] == idx:
-                    extractive += sent[0]["sentence"] + " "
-        abstractive = data["abstractive"][0]
         return {
             "title": data["title"],
             "category": data["category"],
             "media_type": data["media_type"],
             "media_name": data["media_name"],
-            "publish_date": data["publish_date"],
-            "article": article,
-            "extractive": extractive,
-            "abstractive": abstractive,
+            "publish_date": pd.to_datetime(data["publish_date"]),
+            "text": data["text"],
+            "extractive": data["extractive"],
+            "abstractive": data["abstractive"][0],
         }
 
     df = pd.DataFrame([process_json(data[i]) for i in range(sample_len)])
-    df["publish_date"] = pd.to_datetime(df["publish_date"])
     df.to_pickle(f"../data/ai.hub/train_{section}_df.pkl")
 
 
@@ -52,8 +41,30 @@ if __name__ == "__main__":
     sections = ["news", "columns"]
     for section in sections:
         # preprocess_data(section)
-
         df = pd.read_pickle(f"../data/ai.hub/train_{section}_df.pkl")
+
+        def extract_sentence(row):
+            extractive_sentences = ""
+            for idx in row["extractive"]:
+                for sent in row["text"]:
+                    if sent and sent[0]["index"] == idx:
+                        extractive_sentences += sent[0]["sentence"] + " "
+            return extractive_sentences
+
+        df["article"] = df.apply(
+            lambda row: " ".join([sent[0]["sentence"] for sent in row["text"] if sent]), axis=1
+        )
+        df["extractive_sentence"] = df.apply(extract_sentence, axis=1)
         print(df.info())
         print(df.category.value_counts())
         print(df.media_name.value_counts())
+
+        df = df[:1000]
+        df.to_pickle(f"../data/ai.hub/train_df.pickle")
+
+        samples = df.sample(n=1)
+        print("article : ", samples["article"].values[0])
+        print("extractive : ", samples["abstractive"].values[0])
+        print("abstractive : ", samples["extractive_sentence"].values[0])
+
+        break
