@@ -17,6 +17,8 @@ src/data
 .vscode
 
 
+master/kobertsum/ext
+
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -370,3 +372,4 @@ dmypy.json
 *.code-workspace
 
 # End of https://www.toptal.com/developers/gitignore/api/python,node,pycharm,vscode
+/master/kobertsum/ext/
