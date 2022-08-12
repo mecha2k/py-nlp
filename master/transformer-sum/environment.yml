@@ -1,4 +1,4 @@
-name: transformersum
+name: transformer-sum
 channels:
     - conda-forge
     - pytorch
