@@ -60,7 +60,7 @@ def read_in_chunks(file_object, chunk_size=5000):
             current_line_num += 1
         lines.append(line.strip())
         current_line_num += 1
-    # When the `file_object` has no more lines left then yield the current chunk,
+    # When the `file_object` has no more lines left than yield the current chunk,
     # even if it is not a chunk of 5000 (`chunk_size`) as long as it contains more than
     # 0 examples.
     if len(lines) > 0:
@@ -90,23 +90,20 @@ def convert_to_extractive_driver(args):
 
     if args.dataset:
         dataset = hf_nlp.load_dataset(args.dataset, args.dataset_version)
+    else:
+        dataset = None
 
     # for each split
-    for name in tqdm(
-        args.split_names, total=len(args.split_names), desc="Dataset Split"
-    ):
+    for name in tqdm(args.split_names, total=len(args.split_names), desc="Dataset Split"):
         if args.dataset:  # if loading using the `nlp` library
             current_dataset = dataset[name]
             source_file = current_dataset[args.data_example_column]
             target_file = current_dataset[args.data_summarized_column]
         else:
             # get the source and target paths
-            source_file_path = os.path.join(
-                args.base_path, (name + "." + args.source_ext)
-            )
-            target_file_path = os.path.join(
-                args.base_path, (name + "." + args.target_ext)
-            )
+            current_dataset = None
+            source_file_path = os.path.join(args.base_path, (name + "." + args.source_ext))
+            target_file_path = os.path.join(args.base_path, (name + "." + args.target_ext))
             logger.info("Opening source and target %s files", name)
             source_file = open(source_file_path, "r")
             target_file = open(target_file_path, "r")
@@ -116,7 +113,7 @@ def convert_to_extractive_driver(args):
             if args.dataset:
                 target_file_len = len(current_dataset)
             else:
-                target_file_len = sum(1 for line in target_file)
+                target_file_len = sum(1 for _ in target_file)
                 # reset pointer back to beginning after getting length
                 target_file.seek(0)
 
@@ -174,9 +171,7 @@ def convert_to_extractive_driver(args):
                 desc="Shards",
             ):
                 piece_idx += last_shard  # effective if resuming (offsets the index)
-                convert_to_extractive_process(
-                    args, nlp, source_docs, target_docs, name, piece_idx
-                )
+                convert_to_extractive_process(args, nlp, source_docs, target_docs, name, piece_idx)
         else:
             # only `str.strip()` the lines if loading from an actual file, not
             # the `nlp` library
@@ -194,9 +189,7 @@ def convert_to_extractive_driver(args):
             target_file.close()
 
 
-def convert_to_extractive_process(
-    args, nlp, source_docs, target_docs, name, piece_idx=None
-):
+def convert_to_extractive_process(args, nlp, source_docs, target_docs, name, piece_idx=None):
     """
     Main process to convert an abstractive summarization dataset to extractive.
     Tokenizes, gets the ``oracle_ids``, splits into ``source`` and ``labels``, and
@@ -285,9 +278,7 @@ def resume(output_path, split, chunk_size):
     # get the first match because and convert to int so max() operator works
     # more info about the below RegEx: https://stackoverflow.com/a/1454936
     # (https://web.archive.org/web/20200701145857/https://stackoverflow.com/questions/1454913/regular-expression-to-find-a-string-included-between-two-characters-while-exclud/1454936) # noqa: E501
-    shard_file_idxs = [
-        int(re.search(r"(?<=\.)(.*?)(?=\.)", a).group(1)) for a in all_json_in_split
-    ]
+    shard_file_idxs = [int(re.search(r"(?<=\.)(.*?)(?=\.)", a).group(1)) for a in all_json_in_split]
 
     last_shard = int(max(shard_file_idxs)) + 1  # because the file indexes start at 0
 
@@ -297,9 +288,7 @@ def resume(output_path, split, chunk_size):
     return num_lines_read, last_shard
 
 
-def check_resume_success(
-    nlp, args, source_file, last_shard, output_path, split, compression
-):
+def check_resume_success(nlp, args, source_file, last_shard, output_path, split, compression):
     logger.info("Checking if resume was successful...")
     chunk_file_path_str = split + "." + str(last_shard - 1) + ".json"
     if compression:
@@ -323,6 +312,7 @@ def check_resume_success(
     try:
         chunk_json, _ = load_json(chunk_file_path)
     except FileNotFoundError:
+        chunk_json = None
         logger.error(
             "The file at path %s was not found. Make sure `--compression` is set correctly.",
             chunk_file_path,
@@ -425,9 +415,7 @@ def tokenize(
 
     del tokenized
     del docs
-    sents = (
-        [[token.text for token in sentence] for sentence in doc] for doc in doc_sents
-    )
+    sents = ([[token.text for token in sentence] for sentence in doc] for doc in doc_sents)
     del doc_sents
 
     logger.debug("Done in %.2f seconds", time() - t0)
@@ -446,6 +434,8 @@ def example_processor(inputs, args, oracle_mode="greedy", no_preprocess=False):
         oracle_ids = greedy_selection(source_doc, target_doc, 3)
     elif oracle_mode == "combination":
         oracle_ids = combination_selection(source_doc, target_doc, 3)
+    else:
+        oracle_ids = None
 
     # `oracle_ids` to labels
     labels = [0] * len(source_doc)
@@ -491,7 +481,7 @@ def preprocess(
     Removes sentences that are too long/short and examples that have
     too few/many sentences.
     """
-    # pick the sentence indexes in `example` if they are larger then `min_sentence_ntokens`
+    # pick the sentence indexes in `example` if they are larger than `min_sentence_ntokens`
     idxs = [i for i, s in enumerate(example) if (len(s) > min_sentence_ntokens)]
     # truncate selected source sentences to `max_sentence_ntokens`
     example = [example[i][:max_sentence_ntokens] for i in idxs]
@@ -606,14 +596,14 @@ def cal_rouge(evaluated_ngrams, reference_ngrams):
     return {"f": f1_score, "p": precision, "r": recall}
 
 
+_path = "../../../src/data/cnn_daily/cnn_dm"
+
 if __name__ == "__main__":
     parser = ArgumentParser(
         description="Convert an Abstractive Summarization Dataset to the Extractive Task"
     )
 
-    parser.add_argument(
-        "base_path", metavar="DIR", type=str, help="path to data directory"
-    )
+    parser.add_argument("base_path", metavar="DIR", type=str, help="path to data directory")
     parser.add_argument(
         "--base_output_path",
         type=str,
