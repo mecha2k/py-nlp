@@ -21,11 +21,12 @@ END_TOKENS = [
     ")",
 ]  # acceptable ways to end a sentence
 
-all_train_urls = "url_lists/all_train.txt"
-all_val_urls = "url_lists/all_val.txt"
-all_test_urls = "url_lists/all_test.txt"
+path_ = "../../../../src/data/cnn_daily/cnn/url_lists/"
+all_train_urls = path_ + "all_train.txt"
+all_val_urls = path_ + "all_val.txt"
+all_test_urls = path_ + "all_test.txt"
 
-finished_files_dir = "cnn_dm"
+finished_files_dir = "../../../../src/data/cnn_daily/cnn_dm"
 
 # These are the number of .story files we expect there to be in cnn_stories_dir and dm_stories_dir
 num_expected_cnn_stories = 92579
