@@ -63,8 +63,7 @@ class Pooling(nn.Module):
 
         if self.mean_tokens or self.max_tokens:
             batch_sequences = [
-                torch.split(word_vectors[idx], seg)
-                for idx, seg in enumerate(sent_lengths)
+                torch.split(word_vectors[idx], seg) for idx, seg in enumerate(sent_lengths)
             ]
             sents_list = [
                 torch.stack(

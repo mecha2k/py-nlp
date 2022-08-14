@@ -29,6 +29,7 @@ def load_json(json_file):
     """
     # `file_extension` is second and path (without extension) is first
     # `file_extension` only contains last extension so ".json.gz" will output ".gz"
+    documents = None
     file_path, file_extension = os.path.splitext(json_file)
     if file_extension == ".json":
         with open(json_file, "r") as json_file_object:
@@ -48,22 +49,17 @@ def load_json(json_file):
     return documents, file_path
 
 
-class StepCheckpointCallback(pl.callbacks.base.Callback):
-    def __init__(
-        self, step_interval=1000, save_name="model", save_path=".", num_saves_to_keep=5
-    ):
+class StepCheckpointCallback(pl.callbacks.Callback):
+    def __init__(self, step_interval=1000, save_name="model", save_path=".", num_saves_to_keep=5):
         super(StepCheckpointCallback, self).__init__()
         self.step_interval = step_interval
         self.save_name = save_name
         self.save_path = save_path
         self.num_saves_to_keep = num_saves_to_keep
 
-    def on_batch_end(self, trainer, pl_module):  # skipcq: PYL-W0613
+    def on_batch_end(self, trainer):  # skipcq: PYL-W0613
         # check if `step_interval` has passed and that the `global_step` is not 0
-        if (
-            trainer.global_step % self.step_interval == 0
-            and not trainer.global_step == 0
-        ):
+        if trainer.global_step % self.step_interval == 0 and not trainer.global_step == 0:
             logger.info(
                 "Saving model to %s.ckpt at step %i.",
                 self.save_path,
@@ -76,9 +72,7 @@ class StepCheckpointCallback(pl.callbacks.base.Callback):
             trainer.save_checkpoint(final_save_location)
             # remove previous saves
             offset = self.step_interval * self.num_saves_to_keep
-            path_to_remove = (
-                self.save_name + "." + str(trainer.global_step - offset) + ".ckpt"
-            )
+            path_to_remove = self.save_name + "." + str(trainer.global_step - offset) + ".ckpt"
             if os.path.isfile(path_to_remove):
                 os.remove(path_to_remove)
 
@@ -158,9 +152,7 @@ def pad(data, pad_id, width=None, pad_on_left=False, nearest_multiple_of=False):
     return rtn_data
 
 
-def pad_tensors(
-    tensors, pad_id=0, width=None, pad_on_left=False, nearest_multiple_of=False
-):
+def pad_tensors(tensors, pad_id=0, width=None, pad_on_left=False, nearest_multiple_of=False):
     """
     Pad ``tensors`` with ``pad_id`` to ``width`` on the right by default but
     if ``pad_on_left`` then left.
@@ -188,7 +180,7 @@ def test_rouge(temp_dir, cand, ref):
     r"""Compute ROUGE scores using the official ROUGE 1.5.5 package. This function uses the
     ``pyrouge`` python module to interface with the office ROUGE script. There should be a
     "<q>" token between each sentence in the ``cand`` and ``ref`` files. ``pyrouge`` splits
-    sentences based on newlines but we cannot store all the summaries easily in a single text
+    sentences based on newlines, but we cannot store all the summaries easily in a single text
     file if there is a newline between each sentence since newlines mark new summaries. Thus,
     the "<q>" token is used in the text files and is converted to a newline in this function.
     Using "<q>" instead of ``\\n`` also makes it easier to store the ground-truth summaries
@@ -225,13 +217,9 @@ def test_rouge(temp_dir, cand, ref):
         for i in range(cnt):
             if len(references[i]) < 1:
                 continue
-            with open(
-                tmp_dir + "/candidate/cand.{}.txt".format(i), "w", encoding="utf-8"
-            ) as f:
+            with open(tmp_dir + "/candidate/cand.{}.txt".format(i), "w", encoding="utf-8") as f:
                 f.write(candidates[i].replace("<q>", "\n"))
-            with open(
-                tmp_dir + "/reference/ref.{}.txt".format(i), "w", encoding="utf-8"
-            ) as f:
+            with open(tmp_dir + "/reference/ref.{}.txt".format(i), "w", encoding="utf-8") as f:
                 f.write(references[i].replace("<q>", "\n"))
         r = pyrouge.Rouge155()
         r.model_dir = tmp_dir + "/reference/"
@@ -290,6 +278,7 @@ class SortishSampler(Sampler):
     """
 
     def __init__(self, data, batch_size, pad_token_id):
+        super().__init__()
         self.data, self.bs, self.pad_token_id = data, batch_size, pad_token_id
 
     def key(self, i):
@@ -303,9 +292,7 @@ class SortishSampler(Sampler):
         idxs = np.random.permutation(len(self.data))
         sz = self.bs * 50
         ck_idx = [idxs[i : i + sz] for i in range(0, len(idxs), sz)]
-        sort_idx = np.concatenate(
-            [sorted(s, key=self.key, reverse=True) for s in ck_idx]
-        )
+        sort_idx = np.concatenate([sorted(s, key=self.key, reverse=True) for s in ck_idx])
         sz = self.bs
         ck_idx = [sort_idx[i : i + sz] for i in range(0, len(sort_idx), sz)]
         max_ck = np.argmax(
@@ -383,10 +370,7 @@ def generic_configure_optimizers(hparams, train_dataloader, params_to_update):
         t_total = hparams.max_steps * hparams.accumulate_grad_batches
     else:
         t_total = int(
-            (
-                len(train_dataloader.dataset)
-                // (hparams.batch_size * max(1, hparams.gpus))
-            )
+            (len(train_dataloader.dataset) // (hparams.batch_size * max(1, hparams.gpus)))
             * hparams.max_epochs
             // hparams.accumulate_grad_batches
         )
@@ -396,15 +380,11 @@ def generic_configure_optimizers(hparams, train_dataloader, params_to_update):
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
-            "params": [
-                p for n, p in params_to_update if not any(nd in n for nd in no_decay)
-            ],
+            "params": [p for n, p in params_to_update if not any(nd in n for nd in no_decay)],
             "weight_decay": hparams.weight_decay,
         },
         {
-            "params": [
-                p for n, p in params_to_update if any(nd in n for nd in no_decay)
-            ],
+            "params": [p for n, p in params_to_update if any(nd in n for nd in no_decay)],
             "weight_decay": 0.0,
         },
     ]
@@ -447,10 +427,11 @@ def generic_configure_optimizers(hparams, train_dataloader, params_to_update):
                 "The value %s for `--use_scheduler` is invalid.",
                 hparams.use_scheduler,
             )
+            scheduler = None
         # the below interval is called "step" but the scheduler is moved forward
         # every batch.
         scheduler_dict = {"scheduler": scheduler, "interval": "step"}
 
-        return ([optimizer], [scheduler_dict])
+        return [optimizer], [scheduler_dict]
 
     return optimizer

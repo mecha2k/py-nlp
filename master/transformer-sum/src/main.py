@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import random
 from argparse import ArgumentParser
 
@@ -33,6 +34,9 @@ def set_seed(seed):
     )
 
 
+_path = "../../../src/data/cnn_daily/cnn_dm"
+
+
 def main(args):
     if args.seed:
         set_seed(args.seed)
@@ -44,9 +48,7 @@ def main(args):
 
     if args.load_weights:
         model = summarizer(hparams=args)
-        checkpoint = torch.load(
-            args.load_weights, map_location=lambda storage, loc: storage
-        )
+        checkpoint = torch.load(args.load_weights, map_location=lambda storage, loc: storage)
         model.load_state_dict(checkpoint["state_dict"], strict=args.no_strict)
     elif args.load_from_checkpoint:
         try:
@@ -128,7 +130,7 @@ def main(args):
         new_lr = lr_finder.suggestion()
         logger.info("Recommended Learning Rate: %s", new_lr)
 
-    # remove `args.callbacks` if it exists so it does not get saved with the model
+    # remove `args.callbacks` if it exists, so it does not get saved with the model
     # (would result in crash)
     if args.custom_checkpoint_every_n:
         del args.callbacks
@@ -210,7 +212,7 @@ if __name__ == "__main__":
         help="Check val every n train epochs.",
     )
     parser.add_argument(
-        "--gpus",
+        "--devices",
         default=-1,
         type=int,
         help="Number of GPUs to train on or Which GPUs to train on. (default: -1 (all gpus))",
@@ -273,7 +275,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed",
         type=int,
-        default=None,
+        default=42,
         help="Seed for reproducible results. Can negatively impact performace in some cases.",
     )
     parser.add_argument(
@@ -329,17 +331,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--accelerator",
-        default=None,
+        default="gpu",
         type=str,
         choices=["dp", "ddp", "ddp_cpu", "ddp2"],
         help="The accelerator backend to use (previously known as distributed_backend).",
     )
-    parser.add_argument(
-        "--do_train", action="store_true", help="Run the training procedure."
-    )
-    parser.add_argument(
-        "--do_test", action="store_true", help="Run the testing procedure."
-    )
+    parser.add_argument("--do_train", action="store_true", help="Run the training procedure.")
+    parser.add_argument("--do_test", action="store_true", help="Run the testing procedure.")
     parser.add_argument(
         "--load_weights",
         default=False,

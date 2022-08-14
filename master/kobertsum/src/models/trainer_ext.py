@@ -38,7 +38,7 @@ def build_trainer(args, device_id, model, optim):
         gpu_rank = 0
         n_gpu = 0
 
-    print('gpu_rank %d' % gpu_rank)
+    print("gpu_rank %d" % gpu_rank)
 
     tensorboard_log_dir = args.model_path
 
@@ -49,9 +49,9 @@ def build_trainer(args, device_id, model, optim):
     trainer = Trainer(args, model, optim, grad_accum_count, n_gpu, gpu_rank, report_manager)
 
     # print(tr)
-    if (model):
+    if model:
         n_params = _tally_parameters(model)
-        logger.info('* number of parameters: %d' % n_params)
+        logger.info("* number of parameters: %d" % n_params)
 
     return trainer
 
@@ -81,9 +81,9 @@ class Trainer(object):
                 Thus nothing will be saved if this parameter is None
     """
 
-    def __init__(self, args, model, optim,
-                 grad_accum_count=1, n_gpu=1, gpu_rank=1,
-                 report_manager=None):
+    def __init__(
+        self, args, model, optim, grad_accum_count=1, n_gpu=1, gpu_rank=1, report_manager=None
+    ):
         # Basic attributes.
         self.args = args
         self.save_checkpoint_steps = args.save_checkpoint_steps
@@ -94,10 +94,10 @@ class Trainer(object):
         self.gpu_rank = gpu_rank
         self.report_manager = report_manager
 
-        self.loss = torch.nn.BCELoss(reduction='none')
+        self.loss = torch.nn.BCELoss(reduction="none")
         assert grad_accum_count > 0
         # Set model in training mode.
-        if (model):
+        if model:
             self.model.train()
 
     def train(self, train_iter_fct, train_steps, valid_iter_fct=None, valid_steps=-1):
@@ -118,7 +118,7 @@ class Trainer(object):
         Return:
             None
         """
-        logger.info('Start training...')
+        logger.info("Start training...")
 
         # step =  self.optim._step + 1
         step = self.optim._step + 1
@@ -143,23 +143,20 @@ class Trainer(object):
                     if accum == self.grad_accum_count:
                         reduce_counter += 1
                         if self.n_gpu > 1:
-                            normalization = sum(distributed
-                                                .all_gather_list
-                                                (normalization))
+                            normalization = sum(distributed.all_gather_list(normalization))
 
                         self._gradient_accumulation(
-                            true_batchs, normalization, total_stats,
-                            report_stats)
+                            true_batchs, normalization, total_stats, report_stats
+                        )
 
                         report_stats = self._maybe_report_training(
-                            step, train_steps,
-                            self.optim.learning_rate,
-                            report_stats)
+                            step, train_steps, self.optim.learning_rate, report_stats
+                        )
 
                         true_batchs = []
                         accum = 0
                         normalization = 0
-                        if (step % self.save_checkpoint_steps == 0 and self.gpu_rank == 0):
+                        if step % self.save_checkpoint_steps == 0 and self.gpu_rank == 0:
                             self._save(step)
 
                         step += 1
@@ -170,7 +167,7 @@ class Trainer(object):
         return total_stats
 
     def validate(self, valid_iter, step=0):
-        """ Validate model.
+        """Validate model.
             valid_iter: validate data iterator
         Returns:
             :obj:`nmt.Statistics`: validation loss statistics
@@ -200,7 +197,7 @@ class Trainer(object):
             return stats
 
     def test(self, test_iter, step, cal_lead=False, cal_oracle=False):
-        """ Validate model.
+        """Validate model.
             valid_iter: validate data iterator
         Returns:
             :obj:`nmt.Statistics`: validation loss statistics
@@ -212,7 +209,7 @@ class Trainer(object):
             text_length = len(text)
             max_index_ngram_start = text_length - n
             for i in range(max_index_ngram_start + 1):
-                ngram_set.add(tuple(text[i:i + n]))
+                ngram_set.add(tuple(text[i : i + n]))
             return ngram_set
 
         def _block_tri(c, p):
@@ -223,14 +220,14 @@ class Trainer(object):
                     return True
             return False
 
-        if (not cal_lead and not cal_oracle):
+        if not cal_lead and not cal_oracle:
             self.model.eval()
         stats = Statistics()
 
-        can_path = '%s_step_%d.candidate' % (self.args.result_path, step)
-        gold_path = '%s_step_%d.gold' % (self.args.result_path, step)
-        with open(can_path, 'w') as save_pred:
-            with open(gold_path, 'w') as save_gold:
+        can_path = "%s_step_%d.candidate" % (self.args.result_path, step)
+        gold_path = "%s_step_%d.gold" % (self.args.result_path, step)
+        with open(can_path, "w") as save_pred:
+            with open(gold_path, "w") as save_gold:
                 with torch.no_grad():
                     for batch in test_iter:
                         src = batch.src
@@ -244,11 +241,13 @@ class Trainer(object):
                         pred = []
                         pred_idx = []
 
-                        if (cal_lead):
+                        if cal_lead:
                             selected_ids = [list(range(batch.clss.size(1)))] * batch.batch_size
-                        elif (cal_oracle):
-                            selected_ids = [[j for j in range(batch.clss.size(1)) if labels[i][j] == 1] for i in
-                                            range(batch.batch_size)]
+                        elif cal_oracle:
+                            selected_ids = [
+                                [j for j in range(batch.clss.size(1)) if labels[i][j] == 1]
+                                for i in range(batch.batch_size)
+                            ]
                         else:
                             sent_scores, mask = self.model(src, segs, clss, mask, mask_cls)
 
@@ -266,54 +265,56 @@ class Trainer(object):
                         for i, idx in enumerate(selected_ids):
                             _pred = []
                             _pred_idx = []
-                            if (len(batch.src_str[i]) == 0):
+                            if len(batch.src_str[i]) == 0:
                                 continue
-                            for j in selected_ids[i][:len(batch.src_str[i])]:
-                                if (j >= len(batch.src_str[i])):
+                            for j in selected_ids[i][: len(batch.src_str[i])]:
+                                if j >= len(batch.src_str[i]):
                                     continue
                                 candidate = batch.src_str[i][j].strip()
-                                if (self.args.block_trigram):
-                                    if (not _block_tri(candidate, _pred)):
+                                if self.args.block_trigram:
+                                    if not _block_tri(candidate, _pred):
                                         _pred.append(candidate)
                                         _pred_idx.append(j)
                                 else:
                                     _pred.append(candidate)
                                     _pred_idx.append(j)
 
-                                if ((not cal_oracle) and (not self.args.recall_eval) and len(_pred) == 3):
+                                if (
+                                    (not cal_oracle)
+                                    and (not self.args.recall_eval)
+                                    and len(_pred) == 3
+                                ):
                                     break
-                            
+
                             if len(_pred) < 3:
                                 print(_pred)
-                                #print('selected_ids: ', selected_ids)
-                                print('batch.src_str[i]: ', batch.src_str[i])
-                                print('selected_ids[i]: ', selected_ids[i])
+                                # print('selected_ids: ', selected_ids)
+                                print("batch.src_str[i]: ", batch.src_str[i])
+                                print("selected_ids[i]: ", selected_ids[i])
                                 _pred = np.array(batch.src_str[i])[selected_ids[i][:3]]
                                 print(_pred)
 
-
-                            _pred = '<q>'.join(_pred)
-                            if (self.args.recall_eval):
-                                _pred = ' '.join(_pred.split()[:len(batch.tgt_str[i].split())])
+                            _pred = "<q>".join(_pred)
+                            if self.args.recall_eval:
+                                _pred = " ".join(_pred.split()[: len(batch.tgt_str[i].split())])
 
                             pred.append(_pred)
                             pred_idx.append(_pred_idx)
                             gold.append(batch.tgt_str[i])
-                        #print(batch.tgt_str)
+                        # print(batch.tgt_str)
                         # print(pred)
                         for i in range(len(gold)):
-                            save_gold.write(gold[i].strip() + '\n')
+                            save_gold.write(gold[i].strip() + "\n")
                         for i in range(len(pred)):
-                            save_pred.write(pred[i].strip() + str(pred_idx[i]) + '\n')
-        if (step != -1 and self.args.report_rouge):
+                            save_pred.write(pred[i].strip() + str(pred_idx[i]) + "\n")
+        if step != -1 and self.args.report_rouge:
             rouges = test_rouge(self.args.temp_dir, can_path, gold_path)
-            logger.info('Rouges at step %d \n%s' % (step, rouge_results_to_str(rouges)))
+            logger.info("Rouges at step %d \n%s" % (step, rouge_results_to_str(rouges)))
         self._report_step(0, step, valid_stats=stats)
 
         return stats
 
-    def _gradient_accumulation(self, true_batchs, normalization, total_stats,
-                               report_stats):
+    def _gradient_accumulation(self, true_batchs, normalization, total_stats, report_stats):
         if self.grad_accum_count > 1:
             self.model.zero_grad()
 
@@ -344,22 +345,24 @@ class Trainer(object):
             if self.grad_accum_count == 1:
                 # Multi GPU gradient gather
                 if self.n_gpu > 1:
-                    grads = [p.grad.data for p in self.model.parameters()
-                             if p.requires_grad
-                             and p.grad is not None]
-                    distributed.all_reduce_and_rescale_tensors(
-                        grads, float(1))
+                    grads = [
+                        p.grad.data
+                        for p in self.model.parameters()
+                        if p.requires_grad and p.grad is not None
+                    ]
+                    distributed.all_reduce_and_rescale_tensors(grads, float(1))
                 self.optim.step()
 
         # in case of multi step gradient accumulation,
         # update only after accum batches
         if self.grad_accum_count > 1:
             if self.n_gpu > 1:
-                grads = [p.grad.data for p in self.model.parameters()
-                         if p.requires_grad
-                         and p.grad is not None]
-                distributed.all_reduce_and_rescale_tensors(
-                    grads, float(1))
+                grads = [
+                    p.grad.data
+                    for p in self.model.parameters()
+                    if p.requires_grad and p.grad is not None
+                ]
+                distributed.all_reduce_and_rescale_tensors(grads, float(1))
             self.optim.step()
 
     def _save(self, step):
@@ -371,15 +374,15 @@ class Trainer(object):
         model_state_dict = real_model.state_dict()
         # generator_state_dict = real_generator.state_dict()
         checkpoint = {
-            'model': model_state_dict,
+            "model": model_state_dict,
             # 'generator': generator_state_dict,
-            'opt': self.args,
-            'optim': self.optim,
+            "opt": self.args,
+            "optim": self.optim,
         }
-        checkpoint_path = os.path.join(self.args.model_path, 'model_step_%d.pt' % step)
+        checkpoint_path = os.path.join(self.args.model_path, "model_step_%d.pt" % step)
         logger.info("Saving checkpoint %s" % checkpoint_path)
         # checkpoint_path = '%s_step_%d.pt' % (FLAGS.model_path, step)
-        if (not os.path.exists(checkpoint_path)):
+        if not os.path.exists(checkpoint_path):
             torch.save(checkpoint, checkpoint_path)
             return checkpoint, checkpoint_path
 
@@ -408,27 +411,25 @@ class Trainer(object):
             return Statistics.all_gather_stats(stat)
         return stat
 
-    def _maybe_report_training(self, step, num_steps, learning_rate,
-                               report_stats):
+    def _maybe_report_training(self, step, num_steps, learning_rate, report_stats):
         """
         Simple function to report training stats (if report_manager is set)
         see `onmt.utils.ReportManagerBase.report_training` for doc
         """
         if self.report_manager is not None:
             return self.report_manager.report_training(
-                step, num_steps, learning_rate, report_stats,
-                multigpu=self.n_gpu > 1)
+                step, num_steps, learning_rate, report_stats, multigpu=self.n_gpu > 1
+            )
 
-    def _report_step(self, learning_rate, step, train_stats=None,
-                     valid_stats=None):
+    def _report_step(self, learning_rate, step, train_stats=None, valid_stats=None):
         """
         Simple function to report stats (if report_manager is set)
         see `onmt.utils.ReportManagerBase.report_step` for doc
         """
         if self.report_manager is not None:
             return self.report_manager.report_step(
-                learning_rate, step, train_stats=train_stats,
-                valid_stats=valid_stats)
+                learning_rate, step, train_stats=train_stats, valid_stats=valid_stats
+            )
 
     def _maybe_save(self, step):
         """

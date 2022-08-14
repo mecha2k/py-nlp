@@ -48,9 +48,7 @@ class LinearClassifier(nn.Module):
             self.activation = nn.GELU()
         else:
             self.activation = (
-                get_activation(activation_string)
-                if activation_string
-                else nn.Identity()
+                get_activation(activation_string) if activation_string else nn.Identity()
             )
 
     def forward(self, x, mask):

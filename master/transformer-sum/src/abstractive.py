@@ -44,7 +44,7 @@ def trim_batch(
     if attention_mask is None:
         return input_ids[:, keep_column_mask]
 
-    return (input_ids[:, keep_column_mask], attention_mask[:, keep_column_mask])
+    return input_ids[:, keep_column_mask], attention_mask[:, keep_column_mask]
 
 
 def longformer_modifier(final_dictionary, tokenizer, attention_window):
@@ -54,7 +54,7 @@ def longformer_modifier(final_dictionary, tokenizer, attention_window):
     task-specific finetuning because it makes the model more flexible at representing the
     task. For example, for classification, the `<s>` token should be given global attention.
     For QA, all question tokens should also have global attention. For summarization,
-    global attention is given to all of the `<s>` (RoBERTa 'CLS' equivalent) tokens. Please
+    global attention is given to all the `<s>` (RoBERTa 'CLS' equivalent) tokens. Please
     refer to the `Longformer paper <https://arxiv.org/abs/2004.05150>`_ for more details. Mask
     values selected in ``[0, 1]``: ``0`` for local attention, ``1`` for global attention.
     """
@@ -146,12 +146,8 @@ class AbstractiveSummarizer(pl.LightningModule):
             do_seq_special_add = True
 
         # Convert `target_boseq_token` and `target_eoseq_token` to IDs
-        self.target_boseq_token_id = self.tokenizer.convert_tokens_to_ids(
-            self.target_boseq_token
-        )
-        self.target_eoseq_token_id = self.tokenizer.convert_tokens_to_ids(
-            self.target_eoseq_token
-        )
+        self.target_boseq_token_id = self.tokenizer.convert_tokens_to_ids(self.target_boseq_token)
+        self.target_eoseq_token_id = self.tokenizer.convert_tokens_to_ids(self.target_eoseq_token)
 
         # If the `*oseq` tokens are not already "special" then add them as special
         # tokens so that they are ignored when decoding.
@@ -171,9 +167,7 @@ class AbstractiveSummarizer(pl.LightningModule):
                 ignore_index=self.tokenizer.pad_token_id,
             )
         else:
-            self.loss_func = nn.CrossEntropyLoss(
-                ignore_index=self.tokenizer.pad_token_id
-            )
+            self.loss_func = nn.CrossEntropyLoss(ignore_index=self.tokenizer.pad_token_id)
 
         self.train_dataloader_object = None  # not created yet
         self.rouge_metrics = None
@@ -182,34 +176,23 @@ class AbstractiveSummarizer(pl.LightningModule):
 
         self.tokenized_data_file_paths = {}
         for split in ["train", "validation", "test"]:
-            features_cache_file = os.path.join(
-                self.hparams.cache_file_path, (split + "_tokenized")
-            )
+            features_cache_file = os.path.join(self.hparams.cache_file_path, (split + "_tokenized"))
             self.tokenized_data_file_paths[split] = features_cache_file
 
         if any(
-            x in self.hparams.model_name_or_path
-            for x in ["longformer", "led-base", "led-large"]
+            x in self.hparams.model_name_or_path for x in ["longformer", "led-base", "led-large"]
         ):
             longformer_modifier_ = partial(
                 longformer_modifier,
                 tokenizer=self.tokenizer,
                 attention_window=self.model.config.attention_window,
             )
-            self.collate_fn = partial(
-                self.abs_collate_fn, modifier=longformer_modifier_
-            )
+            self.collate_fn = partial(self.abs_collate_fn, modifier=longformer_modifier_)
         else:
             self.collate_fn = self.abs_collate_fn
 
     def forward(
-        self,
-        source=None,
-        target=None,
-        source_mask=None,
-        target_mask=None,
-        labels=None,
-        **kwargs
+        self, source=None, target=None, source_mask=None, target_mask=None, labels=None, **kwargs
     ):
         """Model forward function. See the `60 minute bliz tutorial <https://pytorch.org/tutorials/beginner/blitz/neural_networks_tutorial.html>`_
         if you are unsure what a forward function is.
@@ -248,7 +231,7 @@ class AbstractiveSummarizer(pl.LightningModule):
             decoder_attention_mask=target_mask,
             use_cache=(labels is None),
             labels=None,
-            **kwargs
+            **kwargs,
         )
 
         prediction_scores = outputs[0]
@@ -269,9 +252,7 @@ class AbstractiveSummarizer(pl.LightningModule):
         columns = ["source", "target", "source_mask", "target_mask"]
         if stage == "fit":
             train = nlp.Dataset.from_file(self.tokenized_data_file_paths["train"])
-            validation = nlp.Dataset.from_file(
-                self.tokenized_data_file_paths["validation"]
-            )
+            validation = nlp.Dataset.from_file(self.tokenized_data_file_paths["validation"])
 
             train.set_format(type="torch", columns=columns)
             validation.set_format(type="torch", columns=columns)
@@ -297,9 +278,7 @@ class AbstractiveSummarizer(pl.LightningModule):
                 + "final tokenized data files are present."
             )
             if self.hparams.only_preprocess:
-                logger.info(
-                    "Exiting because both `--no_prepare_data` and `--only_preprocess` set."
-                )
+                logger.info("Exiting because both `--no_prepare_data` and `--only_preprocess` set.")
                 sys.exit(0)
             return
 
@@ -318,7 +297,8 @@ class AbstractiveSummarizer(pl.LightningModule):
                         truncation=True,
                     )
                     articles_encoded_step.append(article_encoded)
-                except Exception:  # skipcq: FLK-E722
+                except Exception as e:  # skipcq: FLK-E722
+                    print(f"Error {e}")
                     print("Failed to tokenize article: {}".format(article))
                     sys.exit(1)
 
@@ -379,9 +359,7 @@ class AbstractiveSummarizer(pl.LightningModule):
                 del sents_tokenized[-1][-1]
                 # Flatten `sents_tokenized` (a list of sentences where each sentence is a list
                 # of tokens) to a list of tokens
-                sents_tokenized_flat = list(
-                    itertools.chain.from_iterable(sents_tokenized)
-                )
+                sents_tokenized_flat = list(itertools.chain.from_iterable(sents_tokenized))
                 assert type(sents_tokenized_flat[0]) is str
                 assert len(sents_tokenized_flat) > 0
 
@@ -417,9 +395,7 @@ class AbstractiveSummarizer(pl.LightningModule):
                 self.tokenizer.pad_token_id,
                 width=max_length,
             )
-            highlights_attention_masks = pad(
-                highlights_attention_masks, 0, width=max_length
-            )
+            highlights_attention_masks = pad(highlights_attention_masks, 0, width=max_length)
 
             return {
                 "source": articles_encoded["input_ids"],
@@ -437,9 +413,7 @@ class AbstractiveSummarizer(pl.LightningModule):
             # keep_highlight = highlight and highlight != "\n" and highlight != ""
             if self.hparams.use_percentage_of_data:
                 keep_example = (
-                    article
-                    and highlight
-                    and random.random() < self.hparams.use_percentage_of_data
+                    article and highlight and random.random() < self.hparams.use_percentage_of_data
                 )
             else:
                 keep_example = bool(article and highlight)
@@ -493,9 +467,7 @@ class AbstractiveSummarizer(pl.LightningModule):
                     writer = nlp.arrow_writer.ArrowWriter(path=save_path)
                     writer.write_table(new)
                 else:
-                    logger.info(
-                        "Skipping joining split %s because it already exists", split
-                    )
+                    logger.info("Skipping joining split %s because it already exists", split)
 
                 if not os.path.exists(save_path_final_tokenized):
                     # Load combined dataset from file if the final tokenized version
@@ -528,7 +500,7 @@ class AbstractiveSummarizer(pl.LightningModule):
 
         for split, features_cache_file in self.tokenized_data_file_paths.items():
             # If the tokenized version has not been created yet, then do the initial
-            # filtering so it can be created
+            # filtering, so it can be created
             if not os.path.isfile(features_cache_file):
                 logger.info("Removing empty examples from %s dataset", split)
                 start_num_examples = len(self.dataset[split])
@@ -636,9 +608,7 @@ class AbstractiveSummarizer(pl.LightningModule):
     def test_dataloader(self):
         """Create dataloader for testing."""
         self.rouge_metrics = ["rouge1", "rouge2", "rougeL"]
-        self.rouge_scorer = rouge_scorer.RougeScorer(
-            self.rouge_metrics, use_stemmer=True
-        )
+        self.rouge_scorer = rouge_scorer.RougeScorer(self.rouge_metrics, use_stemmer=True)
 
         self.hparams.test_batch_size = (
             self.hparams.test_batch_size
@@ -761,9 +731,7 @@ class AbstractiveSummarizer(pl.LightningModule):
 
         rouge_outputs = []
         if self.hparams.test_use_pyrouge:
-            with open("save_gold.txt", "a+") as save_gold, open(
-                "save_pred.txt", "a+"
-            ) as save_pred:
+            with open("save_gold.txt", "a+") as save_gold, open("save_pred.txt", "a+") as save_pred:
                 for i, _ in enumerate(targets):
                     save_gold.write(targets[i].strip() + "\n")
                 for i, _ in enumerate(predictions):
@@ -776,10 +744,7 @@ class AbstractiveSummarizer(pl.LightningModule):
 
         # Save about `self.hparams.save_percentage` of the predictions and targets
         # if `self.hparams.save_percentage` is set.
-        if (
-            self.hparams.save_percentage
-            and random.random() < self.hparams.save_percentage
-        ):
+        if self.hparams.save_percentage and random.random() < self.hparams.save_percentage:
             index_to_select = random.randrange(0, self.hparams.test_batch_size, 1)
             output_prediction = predictions[index_to_select]
             output_target = targets[index_to_select]
@@ -832,9 +797,7 @@ class AbstractiveSummarizer(pl.LightningModule):
 
         # Write the saved predictions and targets to file
         if self.hparams.save_percentage:
-            predictions = [
-                x["prediction"] for x in outputs if x["prediction"] is not None
-            ]
+            predictions = [x["prediction"] for x in outputs if x["prediction"] is not None]
             targets = [x["target"] for x in outputs if x["target"] is not None]
 
             if self.hparams.default_root_dir is None:
@@ -842,9 +805,7 @@ class AbstractiveSummarizer(pl.LightningModule):
             else:
                 save_dir = self.hparams.default_root_dir
 
-            output_test_predictions_file = os.path.join(
-                save_dir, "test_predictions.txt"
-            )
+            output_test_predictions_file = os.path.join(save_dir, "test_predictions.txt")
             output_test_targets_file = os.path.join(save_dir, "test_targets.txt")
             with open(output_test_predictions_file, "w+") as p_writer, open(
                 output_test_targets_file, "w+"
@@ -887,10 +848,7 @@ class AbstractiveSummarizer(pl.LightningModule):
 
         # If using the LongformerEncoderDecoder then apply the padding for sliding
         # chunks attention.
-        if any(
-            x in self.hparams.model_name_or_path.lower()
-            for x in ["led-large", "led-base"]
-        ):
+        if any(x in self.hparams.model_name_or_path.lower() for x in ["led-large", "led-base"]):
             input_sequence_encoded = pad_tensors(
                 input_sequence_encoded,
                 nearest_multiple_of=self.model.config.attention_window[0],

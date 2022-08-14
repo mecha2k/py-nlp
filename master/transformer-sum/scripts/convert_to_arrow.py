@@ -6,9 +6,7 @@ from pyarrow import json
 import datasets as nlp
 
 
-def convert_to_arrow(
-    file_paths, save_path, cache_path_prefix="./data_chunk", no_combine=False
-):
+def convert_to_arrow(file_paths, save_path, cache_path_prefix="./data_chunk", no_combine=False):
     converted_tables = []
 
     if len(file_paths) == 1:

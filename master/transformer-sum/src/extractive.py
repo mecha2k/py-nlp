@@ -43,9 +43,7 @@ except ImportError:
     )
 
     MODEL_CLASSES = (
-        tuple(
-            "Note: Only showing custom models because old version of `transformers` detected."
-        )
+        tuple("Note: Only showing custom models because old version of `transformers` detected.")
         # + CUSTOM_MODEL_CLASSES
     )
 
@@ -91,9 +89,7 @@ class ExtractiveSummarizer(pl.LightningModule):
             hparams = Namespace(**hparams)
 
         # Set new parameters to defaults if they do not exist in the `hparams` Namespace
-        hparams.gradient_checkpointing = getattr(
-            hparams, "gradient_checkpointing", False
-        )
+        hparams.gradient_checkpointing = getattr(hparams, "gradient_checkpointing", False)
         hparams.tokenizer_no_use_fast = getattr(hparams, "tokenizer_no_use_fast", False)
         hparams.data_type = getattr(hparams, "data_type", "none")
 
@@ -109,10 +105,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         self.word_embedding_model = AutoModel.from_config(embedding_model_config)
 
         if (
-            any(
-                x in hparams.model_name_or_path
-                for x in ["roberta", "distil", "longformer"]
-            )
+            any(x in hparams.model_name_or_path for x in ["roberta", "distil", "longformer"])
         ) and not hparams.no_use_token_type_ids:
             logger.warning(
                 (
@@ -130,17 +123,11 @@ class ExtractiveSummarizer(pl.LightningModule):
             self.freeze_web_model()
 
         if hparams.pooling_mode == "sent_rep_tokens":
-            self.pooling_model = Pooling(
-                sent_rep_tokens=True, mean_tokens=False, max_tokens=False
-            )
+            self.pooling_model = Pooling(sent_rep_tokens=True, mean_tokens=False, max_tokens=False)
         elif hparams.pooling_mode == "max_tokens":
-            self.pooling_model = Pooling(
-                sent_rep_tokens=False, mean_tokens=False, max_tokens=True
-            )
+            self.pooling_model = Pooling(sent_rep_tokens=False, mean_tokens=False, max_tokens=True)
         else:
-            self.pooling_model = Pooling(
-                sent_rep_tokens=False, mean_tokens=True, max_tokens=False
-            )
+            self.pooling_model = Pooling(sent_rep_tokens=False, mean_tokens=True, max_tokens=False)
 
         # if a classifier object was passed when creating this model then store that as the
         # `encoder`
@@ -157,9 +144,7 @@ class ExtractiveSummarizer(pl.LightningModule):
                     dropout=hparams.classifier_dropout,
                 )
             elif hparams.classifier == "simple_linear":
-                self.encoder = SimpleLinearClassifier(
-                    self.word_embedding_model.config.hidden_size
-                )
+                self.encoder = SimpleLinearClassifier(self.word_embedding_model.config.hidden_size)
             elif hparams.classifier == "transformer":
                 self.encoder = TransformerEncoderClassifier(
                     self.word_embedding_model.config.hidden_size,
@@ -186,9 +171,7 @@ class ExtractiveSummarizer(pl.LightningModule):
 
         # Set `hparams.no_test_block_trigrams` to False if it does not exist,
         # otherwise set its value to itself, resulting in no change
-        self.hparams.no_test_block_trigrams = getattr(
-            hparams, "no_test_block_trigrams", False
-        )
+        self.hparams.no_test_block_trigrams = getattr(hparams, "no_test_block_trigrams", False)
 
         # BCELoss: https://pytorch.org/docs/stable/nn.html#bceloss
         # `reduction` is "none" so the mean can be computed with padding ignored.
@@ -206,9 +189,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         self.processor = SentencesProcessor(name="main_processor")
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            hparams.tokenizer_name
-            if hparams.tokenizer_name
-            else hparams.model_name_or_path,
+            hparams.tokenizer_name if hparams.tokenizer_name else hparams.model_name_or_path,
             use_fast=(not self.hparams.tokenizer_no_use_fast),
         )
 
@@ -360,8 +341,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         # The model is having training resumed if the `hparams` contains `resume_from_checkpoint`
         # and `resume_from_checkpoint` is True.
         resuming = (
-            hasattr(self.hparams, "resume_from_checkpoint")
-            and self.hparams.resume_from_checkpoint
+            hasattr(self.hparams, "resume_from_checkpoint") and self.hparams.resume_from_checkpoint
         )
         # `stage` can be "fit" or "test". Only load the pre-trained weights when
         # beginning to fit for the first time (when we are not resuming)
@@ -466,9 +446,7 @@ class ExtractiveSummarizer(pl.LightningModule):
             dataset_files_extensions = [os.path.splitext(x)[1] for x in dataset_files]
             dataset_files_extensions_equal = len(set(dataset_files_extensions)) <= 1
 
-            if (
-                not dataset_files_extensions_equal
-            ) and self.hparams.data_type == "none":
+            if (not dataset_files_extensions_equal) and self.hparams.data_type == "none":
                 logger.error(
                     "Cannot infer data file type because files with different extensions "
                     + "detected. Please set `--data_type`."
@@ -480,10 +458,7 @@ class ExtractiveSummarizer(pl.LightningModule):
                 # If the most common file extension found is not the specified data type
                 # then warn the user they may have chosen the wrong data type.
                 most_common = statistics.mode(dataset_files_extensions)[1:]
-                if (
-                    most_common != self.hparams.data_type
-                    and self.hparams.data_type != "none"
-                ):
+                if most_common != self.hparams.data_type and self.hparams.data_type != "none":
                     logger.warning(
                         "`--data_type` is '%s', but the most common file type detected in the "
                         + "`--data_path` is '%s'. Using '%s' as the type. Data will be processed "
@@ -639,9 +614,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         # If the model is a longformer then create the `global_attention_mask`
         if self.hparams.model_type == "longformer":
 
-            self.pad_batch_collate = partial(
-                pad_batch_collate, modifier=longformer_modifier
-            )
+            self.pad_batch_collate = partial(pad_batch_collate, modifier=longformer_modifier)
         else:
             # default is to just use the normal `pad_batch_collate` function
             self.pad_batch_collate = pad_batch_collate
@@ -681,9 +654,7 @@ class ExtractiveSummarizer(pl.LightningModule):
     def test_dataloader(self):
         """Create dataloader for testing."""
         self.rouge_metrics = ["rouge1", "rouge2", "rougeL", "rougeLsum"]
-        self.rouge_scorer = rouge_scorer.RougeScorer(
-            self.rouge_metrics, use_stemmer=True
-        )
+        self.rouge_scorer = rouge_scorer.RougeScorer(self.rouge_metrics, use_stemmer=True)
         test_dataset = self.datasets[self.hparams.test_name]
         test_dataloader = DataLoader(
             test_dataset,
@@ -719,9 +690,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         if (self.global_step_tracker + 1) == self.trainer.global_step:
             self.global_step_tracker = self.trainer.global_step
 
-            if self.emd_model_frozen and (
-                self.trainer.global_step > self.hparams.num_frozen_steps
-            ):
+            if self.emd_model_frozen and (self.trainer.global_step > self.hparams.num_frozen_steps):
                 self.emd_model_frozen = False
                 self.unfreeze_web_model()
 
@@ -783,9 +752,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         y_hat[y_hat <= 0.5] = 0
         y_hat = torch.flatten(y_hat)
         y_true = torch.flatten(labels)
-        result = acc_and_f1(
-            y_hat.detach().cpu().numpy(), y_true.float().detach().cpu().numpy()
-        )
+        result = acc_and_f1(y_hat.detach().cpu().numpy(), y_true.float().detach().cpu().numpy())
         acc = torch.tensor(result["acc"])
         f1 = torch.tensor(result["f1"])
         acc_f1 = torch.tensor(result["acc_and_f1"])
@@ -814,12 +781,8 @@ class ExtractiveSummarizer(pl.LightningModule):
         avg_loss_total_norm_batch = torch.stack(
             [x["val_loss_total_norm_batch"] for x in outputs]
         ).mean()
-        avg_loss_avg_seq_sum = torch.stack(
-            [x["val_loss_avg_seq_sum"] for x in outputs]
-        ).mean()
-        avg_loss_avg_seq_mean = torch.stack(
-            [x["val_loss_avg_seq_mean"] for x in outputs]
-        ).mean()
+        avg_loss_avg_seq_sum = torch.stack([x["val_loss_avg_seq_sum"] for x in outputs]).mean()
+        avg_loss_avg_seq_mean = torch.stack([x["val_loss_avg_seq_mean"] for x in outputs]).mean()
         avg_loss_avg = torch.stack([x["val_loss_avg"] for x in outputs]).mean()
         avg_val_acc = torch.stack([x["val_acc"] for x in outputs]).mean()
         avg_val_f1 = torch.stack([x["val_f1"] for x in outputs]).mean()
@@ -870,16 +833,12 @@ class ExtractiveSummarizer(pl.LightningModule):
         y_hat[y_hat <= 0.5] = 0
         y_hat = torch.flatten(y_hat)
         y_true = torch.flatten(labels)
-        result = acc_and_f1(
-            y_hat.detach().cpu().numpy(), y_true.float().detach().cpu().numpy()
-        )
+        result = acc_and_f1(y_hat.detach().cpu().numpy(), y_true.float().detach().cpu().numpy())
         acc = torch.tensor(result["acc"])
         f1 = torch.tensor(result["f1"])
         acc_f1 = torch.tensor(result["acc_and_f1"])
 
-        sorted_ids = (
-            torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
-        )
+        sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
         if self.hparams.test_id_method == "top_k":
             selected_ids = sorted_ids  # [:, : self.hparams.test_k]
         elif self.hparams.test_id_method == "greater_k":
@@ -929,9 +888,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         rouge_outputs = []
         predictions = []
         # get ROUGE scores for each (source, target) pair
-        for idx, (source, source_ids, target) in enumerate(
-            zip(sources, selected_ids, targets)
-        ):
+        for idx, (source, source_ids, target) in enumerate(zip(sources, selected_ids, targets)):
             current_prediction = []
             for sent_idx, i in enumerate(source_ids):
                 if i >= len(source):
@@ -981,14 +938,10 @@ class ExtractiveSummarizer(pl.LightningModule):
                 # item/sentence. `rouge-score` splits sentences by newline.
                 current_prediction = "\n".join(current_prediction)
                 target = target.replace("<q>", "\n")
-                rouge_outputs.append(
-                    self.rouge_scorer.score(target, current_prediction)
-                )
+                rouge_outputs.append(self.rouge_scorer.score(target, current_prediction))
 
         if self.hparams.test_use_pyrouge:
-            with open("save_gold.txt", "a+") as save_gold, open(
-                "save_pred.txt", "a+"
-            ) as save_pred:
+            with open("save_gold.txt", "a+") as save_gold, open("save_pred.txt", "a+") as save_pred:
                 for i in enumerate(targets):
                     save_gold.write(targets[i].strip() + "\n")
                 for i in enumerate(predictions):
@@ -1012,9 +965,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         # Get the accuracy metrics over all testing runs
         avg_test_acc = torch.stack([x["test_acc"] for x in outputs]).mean()
         avg_test_f1 = torch.stack([x["test_f1"] for x in outputs]).mean()
-        avg_test_acc_and_f1 = torch.stack(
-            [x["test_acc_and_f1"] for x in outputs]
-        ).mean()
+        avg_test_acc_and_f1 = torch.stack([x["test_acc_and_f1"] for x in outputs]).mean()
 
         rouge_scores_log = {}
 
@@ -1101,8 +1052,7 @@ class ExtractiveSummarizer(pl.LightningModule):
             nlp.add_pipe(sentencizer)
 
             src_txt = [
-                " ".join([token.text for token in nlp(sentence) if str(token) != "."])
-                + "."
+                " ".join([token.text for token in nlp(sentence) if str(token) != "."]) + "."
                 for sentence in input_sentences
             ]
 
@@ -1144,9 +1094,7 @@ class ExtractiveSummarizer(pl.LightningModule):
             sent_scores = list(zip(src_txt, outputs.tolist()[0]))
             return sent_scores
 
-        sorted_ids = (
-            torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
-        )
+        sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
         logger.debug("Sorted sentence ids: %s", sorted_ids)
         selected_ids = sorted_ids[0, :num_summary_sentences]
         logger.debug("Selected sentence ids: %s", selected_ids)
@@ -1215,9 +1163,7 @@ class ExtractiveSummarizer(pl.LightningModule):
             default=0,
             help="The maximum sequence length of processed documents.",
         )
-        parser.add_argument(
-            "--data_path", type=str, help="Directory containing the dataset."
-        )
+        parser.add_argument("--data_path", type=str, help="Directory containing the dataset.")
         parser.add_argument(
             "--data_type",
             default="none",

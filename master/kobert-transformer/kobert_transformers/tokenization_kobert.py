@@ -177,7 +177,7 @@ class KoBertTokenizer(PreTrainedTokenizer):
         return new_pieces
 
     def _convert_token_to_id(self, token):
-        """ Converts a token (str/unicode) in an id using the vocab. """
+        """Converts a token (str/unicode) in an id using the vocab."""
         return self.token2idx.get(token, self.token2idx[self.unk_token])
 
     def _convert_id_to_token(self, index):
@@ -203,7 +203,9 @@ class KoBertTokenizer(PreTrainedTokenizer):
         sep = [self.sep_token_id]
         return cls + token_ids_0 + sep + token_ids_1 + sep
 
-    def get_special_tokens_mask(self, token_ids_0, token_ids_1=None, already_has_special_tokens=False):
+    def get_special_tokens_mask(
+        self, token_ids_0, token_ids_1=None, already_has_special_tokens=False
+    ):
         """
         Retrieves sequence ids from a token list that has no special tokens added. This method is called when adding
         special tokens using the tokenizer ``prepare_for_model`` or ``encode_plus`` methods.

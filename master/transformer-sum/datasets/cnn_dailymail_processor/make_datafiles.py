@@ -6,8 +6,8 @@ import subprocess
 import collections
 
 
-dm_single_close_quote = u"\u2019"  # unicode
-dm_double_close_quote = u"\u201d"
+dm_single_close_quote = "\u2019"  # unicode
+dm_double_close_quote = "\u201d"
 END_TOKENS = [
     ".",
     "!",
@@ -20,6 +20,9 @@ END_TOKENS = [
     dm_double_close_quote,
     ")",
 ]  # acceptable ways to end a sentence
+
+src_path = "../../../../../../datasets/cnn_dailymail/cnn"
+print(os.listdir(src_path))
 
 path_ = "../../../../src/data/cnn_daily/cnn/url_lists/"
 all_train_urls = path_ + "all_train.txt"
@@ -35,7 +38,7 @@ num_expected_dm_stories = 219506
 
 def read_text_file(text_file):
     lines = []
-    with open(text_file, "r") as f:
+    with open(text_file, "r", encoding="utf-8") as f:
         for line in f:
             lines.append(line.strip())
     return lines
@@ -101,8 +104,8 @@ def write_to_bin(url_file, out_prefix):
     story_fnames = [s + ".story" for s in url_hashes]
     num_stories = len(story_fnames)
 
-    with open(out_prefix + ".source", "wt") as source_file, open(
-        out_prefix + ".target", "wt"
+    with open(out_prefix + ".source", "wt", encoding="utf-8") as source_file, open(
+        out_prefix + ".target", "wt", encoding="utf-8"
     ) as target_file:
         for idx, s in enumerate(story_fnames):
             if idx % 1000 == 0:

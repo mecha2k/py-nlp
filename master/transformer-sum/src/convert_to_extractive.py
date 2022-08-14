@@ -20,6 +20,10 @@ from tqdm import tqdm
 import datasets as hf_nlp
 from helpers import _get_word_ngrams, load_json
 
+
+# _path = "../../../src/data/cnn_daily/cnn_dm"
+# print(os.listdir(_path))
+
 logger = logging.getLogger(__name__)
 
 # Steps
@@ -105,8 +109,8 @@ def convert_to_extractive_driver(args):
             source_file_path = os.path.join(args.base_path, (name + "." + args.source_ext))
             target_file_path = os.path.join(args.base_path, (name + "." + args.target_ext))
             logger.info("Opening source and target %s files", name)
-            source_file = open(source_file_path, "r")
-            target_file = open(target_file_path, "r")
+            source_file = open(source_file_path, "r", encoding="utf-8")
+            target_file = open(target_file_path, "r", encoding="utf-8")
 
         if args.shard_interval:  # if sharding is enabled
             # get number of examples to process
