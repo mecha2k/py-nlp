@@ -194,7 +194,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--max_steps",
-        default=None,
+        default=-1,
         type=int,
         help="Limits training to a max number number of steps",
     )
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--devices",
-        default=-1,
+        default=8,
         type=int,
         help="Number of GPUs to train on or Which GPUs to train on. (default: -1 (all gpus))",
     )
@@ -275,7 +275,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
+        default=None,
         help="Seed for reproducible results. Can negatively impact performace in some cases.",
     )
     parser.add_argument(
@@ -331,9 +331,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--accelerator",
-        default="gpu",
+        default="cpu",
         type=str,
-        choices=["dp", "ddp", "ddp_cpu", "ddp2"],
+        choices=["cpu", "gpu", "hpu", "ddp2"],
         help="The accelerator backend to use (previously known as distributed_backend).",
     )
     parser.add_argument("--do_train", action="store_true", help="Run the training procedure.")
