@@ -29,7 +29,7 @@ class PolynomialLRDecay(_LRScheduler):
 
         return [
             (base_lr - self.end_learning_rate)
-            * ((1 - self.last_step / self.max_decay_steps) ** (self.power))
+            * ((1 - self.last_step / self.max_decay_steps) ** self.power)
             + self.end_learning_rate
             for base_lr in self.base_lrs
         ]
@@ -41,7 +41,7 @@ class PolynomialLRDecay(_LRScheduler):
         if self.last_step <= self.max_decay_steps:
             decay_lrs = [
                 (base_lr - self.end_learning_rate)
-                * ((1 - self.last_step / self.max_decay_steps) ** (self.power))
+                * ((1 - self.last_step / self.max_decay_steps) ** self.power)
                 + self.end_learning_rate
                 for base_lr in self.base_lrs
             ]

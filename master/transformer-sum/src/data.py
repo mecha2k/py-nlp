@@ -152,7 +152,7 @@ class FSDataset(torch.utils.data.Dataset):
     def get_files_lengths(self, files_list):
         lengths = []
         for data_file in files_list:
-            data_file_len = sum(1 for i in open(data_file, "rb"))
+            data_file_len = sum(1 for _ in open(data_file, "rb"))
             lengths.append(data_file_len)
 
         lengths = np.cumsum(lengths)
@@ -181,6 +181,7 @@ class FSDataset(torch.utils.data.Dataset):
         try:
             line_json = json.loads(line_str)
         except Exception:
+            line_json = None
             print("** JSON Loading Error **")
             print(file_path)
             print(index)
@@ -209,7 +210,7 @@ class FSIterableDataset(torch.utils.data.IterableDataset):
     specified when constructing objects of this class. PyTorch
     ``DataLoader`` objects will report accurate lengths by dividing the
     number of examples in the dataset by the batch size only if the dataset
-    if not an ``IterableDataset``. If the dataset is an ``IterableDataset``
+    is not an ``IterableDataset``. If the dataset is an ``IterableDataset``
     then a ``DataLoader`` will simply ask the dataset for its length,
     without diving by the batch size, because in some cases the length of an
     ``IterableDataset`` might be difficult or impossible to determine.
@@ -640,6 +641,7 @@ class SentencesProcessor:
         # Attention
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
+        attention_mask = None
         if create_attention_mask:
             attention_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
 
@@ -724,9 +726,9 @@ class SentencesProcessor:
         by a model. The following processes can be performed: tokenization, token type ids (to
         separate sentences), sentence representation token ids (the locations of each sentence
         representation token), sentence lengths, and the attention mask. Padding can be applied to
-        the tokenized examples and the attention masks but it is recommended to instead use the
+        the tokenized examples and the attention masks, but it is recommended to instead use the
         :meth:`data.pad_batch_collate` function so each batch is padded individually for efficiency
-        (less zeros passed through model).
+        (fewer zeros passed through model).
 
         Arguments:
             tokenizer (transformers.PreTrainedTokenizer): The tokenizer used to tokenize the
@@ -807,6 +809,7 @@ class SentencesProcessor:
             assert return_type == "lists"
         if return_type == "tensors":
             assert save_as_type == "pt" or save_to_path is None
+        assert create_attention_mask and pad_ids_and_attention is True
         if return_type == "lists":
             create_attention_mask = False
             pad_ids_and_attention = False
@@ -899,17 +902,16 @@ class SentencesProcessor:
                 all_sent_rep_token_ids[all_sent_rep_token_ids == -1] = 0
                 final_tensors.append(all_sent_rep_token_ids)
                 final_tensors.append(all_sent_rep_token_ids_masks)
-
                 if create_sent_lengths:
                     all_sent_lengths = torch.tensor(
                         pad([f.sent_lengths for f in features], 0), dtype=torch.long
                     )
                     final_tensors.append(all_sent_lengths)
-
             dataset = torch.utils.data.TensorDataset(*final_tensors)
-
         elif return_type == "lists":
             dataset = [example.to_dict() for example in features]
+        else:
+            dataset = None
 
         if save_to_path:
             final_save_name = save_to_name if save_to_name else ("dataset_" + self.name)
@@ -920,7 +922,7 @@ class SentencesProcessor:
             logger.info("Saving dataset into cached file %s", dataset_path)
             if save_as_type == "txt":
                 with open(dataset_path, "w+") as file:
-                    # Need to replace single with double quotes so it can be loaded as JSON
+                    # Need to replace single with double quotes, so it can be loaded as JSON
                     file.write("\n".join([json.dumps(x) for x in dataset]) + "\n")
             elif save_as_type == "pt":
                 torch.save(dataset, dataset_path)

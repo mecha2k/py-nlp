@@ -6,13 +6,14 @@ from argparse import ArgumentParser
 
 import numpy as np
 import torch
+import datasets
+
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.plugins import DeepSpeedPlugin
 
-import datasets as nlp
 from abstractive import AbstractiveSummarizer
 from extractive import ExtractiveSummarizer
 from helpers import StepCheckpointCallback
@@ -469,41 +470,35 @@ if __name__ == "__main__":
         help="Set the logging level (default: 'Info').",
     )
 
-    main_args = parser.parse_known_args()
+    args, unknown = parser.parse_known_args()
 
-    if main_args[0].mode == "abstractive":
+    if args.mode == "abstractive":
         parser = AbstractiveSummarizer.add_model_specific_args(parser)
     else:
         parser = ExtractiveSummarizer.add_model_specific_args(parser)
 
-    if main_args[0].custom_checkpoint_every_n and (not main_args[0].weights_save_path):
+    if args.custom_checkpoint_every_n and (not args.weights_save_path):
         logger.error(
             "You must specify the `--weights_save_path` to use `--custom_checkpoint_every_n`."
         )
 
-    if (
-        main_args[0].plugins
-        and main_args[0].plugins.startswith("deepspeed")
-        and (":" not in main_args[0].plugins)
-    ):
+    if args.plugins and args.plugins.startswith("deepspeed") and (":" not in args.plugins):
         logger.error(
-            "If you are using the 'deepspeed' plugin, you must specify the path the to "
-            + "deepspeed config like so: `--plugins deepspeed:/path/to/config.json`."
+            "If you are using the 'deepspeed' plugin, you must specify the path the to deepspeed config like so: `--plugins deepspeed:/path/to/config.json`."
         )
 
-    main_args = parser.parse_args()
+    args = parser.parse_args()
 
     # Setup logging config
     logging.basicConfig(
         format="%(asctime)s|%(name)s|%(levelname)s> %(message)s",
-        level=logging.getLevelName(main_args.logLevel),
+        level=logging.getLevelName(args.logLevel),
     )
 
-    # Set the `nlp` logging verbosity since its default is not INFO.
-    # If the verbosity is not set back to the default for the library, an abundance
-    # of output will be printed.
+    # Set the `nlp` logging verbosity since its default is not INFO. If the verbosity is not
+    # set back to the default for the library, an abundance of output will be printed.
     # See https://huggingface.co/docs/datasets/package_reference/logging_methods.html.
-    nlp.logging.set_verbosity(nlp.logging.WARNING)
+    datasets.logging.set_verbosity(datasets.logging.WARNING)
 
     # Train
-    main(main_args)
+    main(args)
