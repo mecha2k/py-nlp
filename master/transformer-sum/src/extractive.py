@@ -173,16 +173,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         # otherwise set its value to itself, resulting in no change
         self.hparams.no_test_block_trigrams = getattr(hparams, "no_test_block_trigrams", False)
 
-        # BCELoss: https://pytorch.org/docs/stable/nn.html#bceloss
-        # `reduction` is "none" so the mean can be computed with padding ignored.
-        # `nn.BCEWithLogitsLoss` (which combines a sigmoid layer and the BCELoss
-        # in one single class) is used because it takes advantage of the log-sum-exp
-        # trick for numerical stability. Padding values are 0 and if 0 is the input
-        # to the sigmoid function the output will be 0.5. This will cause issues when
-        # inputs with more padding will have higher loss values. To solve this, all
-        # padding values are set to -9e3 as the last step of each encoder. The sigmoid
-        # function transforms -9e3 to nearly 0, thus preserving the proper loss
-        # calculation. See `compute_loss()` for more info.
+        # BCELoss: https://pytorch.org/docs/stable/nn.html#bceloss `reduction` is "none" so the mean can be computed with padding ignored. `nn.BCEWithLogitsLoss` (which combines a sigmoid layer and the BCELoss in one single class) is used because it takes advantage of the log-sum-exp trick for numerical stability. Padding values are 0 and if 0 is the input to the sigmoid function the output will be 0.5. This will cause issues when inputs with more padding will have higher loss values. To solve this, all padding values are set to -9e3 as the last step of each encoder. The sigmoid function transforms -9e3 to nearly 0, thus preserving the proper loss calculation. See `compute_loss()` for more info.
         self.loss_func = nn.BCEWithLogitsLoss(reduction="none")
 
         # Data
