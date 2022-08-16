@@ -17,7 +17,9 @@ from abstractive import AbstractiveSummarizer
 from extractive import ExtractiveSummarizer
 from helpers import StepCheckpointCallback
 
+
 logger = logging.getLogger(__name__)
+_path = "../../../src/data/cnn_daily/cnn_dm"
 
 
 def set_seed(seed):

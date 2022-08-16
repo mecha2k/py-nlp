@@ -55,7 +55,7 @@ def longformer_modifier(final_dictionary):
     task-specific finetuning because it makes the model more flexible at representing the
     task. For example, for classification, the `<s>` token should be given global attention.
     For QA, all question tokens should also have global attention. For summarization,
-    global attention is given to all of the `<s>` (RoBERTa 'CLS' equivalent) tokens. Please
+    global attention is given to all the `<s>` (RoBERTa 'CLS' equivalent) tokens. Please
     refer to the `Longformer paper <https://arxiv.org/abs/2004.05150>`_ for more details. Mask
     values selected in ``[0, 1]``: ``0`` for local attention, ``1`` for global attention.
     """
@@ -134,7 +134,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         if classifier_obj:
             self.encoder = classifier_obj
         # otherwise create the classifier using the `hparams.classifier` parameter if available
-        # if the `hparams.classifier` parameter is missing then create a `LinearClassifier`
+        # is the `hparams.classifier` parameter is missing then create a `LinearClassifier`
         else:
             # returns `classifier` value if it exists, otherwise returns False
             classifier_exists = getattr(hparams, "classifier", False)
@@ -512,7 +512,7 @@ class ExtractiveSummarizer(pl.LightningModule):
             )
 
             # if no dataset files detected or model is set to `only_preprocess`
-            if (not dataset_files) or (self.hparams.only_preprocess):
+            if (not dataset_files) or self.hparams.only_preprocess:
                 json_files = glob.glob(
                     os.path.join(self.hparams.data_path, "*" + corpus_type + ".*.json*")
                 )
@@ -856,7 +856,7 @@ class ExtractiveSummarizer(pl.LightningModule):
                 indexes = np.append(indexes, [[final_index, -1]], axis=0)
 
             for index, value in indexes:
-                # if the index has changed and is not one greater then the previous then
+                # if the index has changed and is not one greater than the previous then
                 # index was skipped because no elements greater than k
                 if (index not in (previous_index, previous_index + 1)) or value == -1:
                     # For the first time the above loop runs, `previous_index` is -1 because no
@@ -880,6 +880,7 @@ class ExtractiveSummarizer(pl.LightningModule):
                     selected_ids[index].append(value)
                 previous_index = index
         else:
+            selected_ids = None
             logger.error(
                 "%s is not a valid option for `--test_id_method`.",
                 self.hparams.test_id_method,
@@ -1211,7 +1212,8 @@ class ExtractiveSummarizer(pl.LightningModule):
             help="""The number of workers to use when loading data. A general place to
             start is to set num_workers equal to the number of CPU cores on your machine.
             If `--dataloader_type` is 'iterable' then this setting has no effect and
-        num_workers will be 1. More details here: https://pytorch-lightning.readthedocs.io/en/latest/performance.html#num-workers""",  # noqa: E501
+            num_workers will be 1. More details here: 
+            https://pytorch-lightning.readthedocs.io/en/latest/performance.html#num-workers""",  # noqa: E501
         )
         parser.add_argument(
             "--processor_no_bert_compatible_cls",
@@ -1268,8 +1270,7 @@ class ExtractiveSummarizer(pl.LightningModule):
             "--classifier_transformer_num_layers",
             type=int,
             default=2,
-            help="The number of layers for the `transformer` classifier. Only has an effect if "
-            + '`--classifier` contains "transformer".',
+            help="The number of layers for the `transformer` classifier. Only has an effect if '`--classifier` contains transformer.",
         )
         parser.add_argument(
             "--train_name",
@@ -1300,24 +1301,17 @@ class ExtractiveSummarizer(pl.LightningModule):
             "--test_k",
             type=float,
             default=3,
-            help="The `k` parameter for the `--test_id_method`. Must be set if using the "
-            + "`greater_k` option. (default: 3)",
+            help="The `k` parameter for the `--test_id_method`. Must be set if using the `greater_k` option. (default: 3)",
         )
         parser.add_argument(
             "--no_test_block_trigrams",
             action="store_true",
-            help="Disable trigram blocking when calculating ROUGE scores during testing. "
-            + "This will increase repetition and thus decrease accuracy.",
+            help="Disable trigram blocking when calculating ROUGE scores during testing. This will increase repetition and thus decrease accuracy.",
         )
         parser.add_argument(
             "--test_use_pyrouge",
             action="store_true",
-            help="""Use `pyrouge`, which is an interface to the official ROUGE software, instead of
-            the pure-python implementation provided by `rouge-score`. You must have the real ROUGE
-            package installed. More details about ROUGE 1.5.5 here: https://github.com/andersjo/pyrouge/tree/master/tools/ROUGE-1.5.5.
-            It is recommended to use this option for official scores. The `ROUGE-L` measurements
-            from `pyrouge` are equivalent to the `rougeLsum` measurements from the default
-            `rouge-score` package.""",  # noqa: E501
+            help="Use `pyrouge`, which is an interface to the official ROUGE software, instead of the pure-python implementation provided by `rouge-score`. You must have the real ROUGE package installed. More details about ROUGE 1.5.5 here: https://github.com/andersjo/pyrouge/tree/master/tools/ROUGE-1.5.5. It is recommended to use this option for official scores. The `ROUGE-L` measurements from `pyrouge` are equivalent to the `rougeLsum` measurements from the default `rouge-score` package.",
         )
         parser.add_argument(
             "--loss_key",
@@ -1330,8 +1324,6 @@ class ExtractiveSummarizer(pl.LightningModule):
                 "loss_avg",
             ],
             default="loss_avg_seq_mean",
-            help="Which reduction method to use with BCELoss. See the "
-            + "`experiments/loss_functions/` folder for info on how the default "
-            + "(`loss_avg_seq_mean`) was chosen.",
+            help="Which reduction method to use with BCELoss. See the `experiments/loss_functions/` folder for info on how the default (`loss_avg_seq_mean`) was chosen.",
         )
         return parser
