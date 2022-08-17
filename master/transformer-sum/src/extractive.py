@@ -1158,7 +1158,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         parser.add_argument("--data_path", type=str, help="Directory containing the dataset.")
         parser.add_argument(
             "--data_type",
-            default="none",
+            default="txt",
             type=str,
             choices=["txt", "pt", "none"],
             help="""The file extension of the prepared data. The 'map' `--dataloader_type`
@@ -1198,7 +1198,7 @@ class ExtractiveSummarizer(pl.LightningModule):
         )
         parser.add_argument(
             "--dataloader_num_workers",
-            default=4,
+            default=0,
             type=int,
             help="""The number of workers to use when loading data. A general place to
             start is to set num_workers equal to the number of CPU cores on your machine.

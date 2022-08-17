@@ -99,6 +99,7 @@ def main(args):
                 save_top_k=-1,
                 every_n_epochs=1,
                 verbose=True,
+                dirpath=args.checkpoint_dir,
             )
         except TypeError:
             logger.warning(
@@ -109,6 +110,7 @@ def main(args):
                 save_top_k=-1,
                 period=1,
                 verbose=True,
+                dirpath=args.checkpoint_dir,
             )
 
     if args.custom_checkpoint_every_n:
@@ -161,15 +163,10 @@ if __name__ == "__main__":
         help="Default path for logs and weights.",
     )
     parser.add_argument(
-        "--weights_save_path",
+        "--checkpoint_dir",
         type=str,
-        help="""Where to save weights if specified. Will override `--default_root_dir` for
-        checkpoints only. Use this if for whatever reason you need the checkpoints stored in
-        a different place than the logs written in `--default_root_dir`.
-        If you are using the `wandb` logger, then you must also set `--no_wandb_logger_log_model`
-        when using this option. Model weights are saved with the wandb logs to be uploaded to
-        wandb.ai by default. Setting this option without setting `--no_wandb_logger_log_model`
-        effectively creates two save paths, which may crash the script.""",
+        default="../../../src/data/cnn_daily/trained_models",
+        help="Default path for logs and weights.",
     )
     parser.add_argument(
         "--learning_rate",
@@ -216,7 +213,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--devices",
-        default=8,
+        default=1,
         type=int,
         help="Number of GPUs to train on or Which GPUs to train on. (default: -1 (all gpus))",
     )
