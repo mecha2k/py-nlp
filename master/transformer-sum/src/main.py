@@ -213,8 +213,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--devices",
-        default=1,
-        type=int,
+        default="auto",
         help="Number of GPUs to train on or Which GPUs to train on. (default: -1 (all gpus))",
     )
     parser.add_argument(
@@ -331,7 +330,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--accelerator",
-        default="cpu",
+        default="auto",
         type=str,
         choices=["cpu", "gpu", "hpu", "ddp2"],
         help="The accelerator backend to use (previously known as distributed_backend).",

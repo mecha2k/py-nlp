@@ -1,3 +1,6 @@
+import numpy as np
+import torch
+
 import copy
 import gc
 import json
@@ -6,10 +9,6 @@ import logging
 import os
 import random
 from functools import partial
-from multiprocessing import Pool
-
-import numpy as np
-import torch
 
 from helpers import pad
 
@@ -364,8 +363,7 @@ class InputFeatures:
 
 
 class SentencesProcessor:
-    r"""Create a `SentencesProcessor`
-
+    """Create a `SentencesProcessor`
     Arguments:
         name (str, optional): A label for the ``SentencesProcessor`` object, used internally for
             saving if a save name is not specified in :meth:`data.SentencesProcessor.get_features`,
@@ -428,16 +426,14 @@ class SentencesProcessor:
 
         # adds a '[CLS]' token between each sentence and outputs `input_ids`
         if bert_compatible_cls:
-            # If the CLS or SEP tokens exist in the document as part of the dataset, then
-            # set them to UNK
+            # If the CLS or SEP tokens exist in the document as part of the dataset, then set them to UNK
             unk_token = str(tokenizer.unk_token)
             src_txt = [
                 sent.replace(sep_token, unk_token).replace(cls_token, unk_token) for sent in src_txt
             ]
 
             if not len(src_txt) < 2:  # if there is NOT 1 sentence
-                # separate each sentence with ' [SEP] [CLS] ' (or model equivalent tokens) and
-                # convert to string
+                # separate each sentence with ' [SEP] [CLS] ' (or model equivalent tokens) and convert to string
                 separation_string = " " + sep_token + " " + cls_token + " "
                 text = separation_string.join(src_txt)
             else:
@@ -474,29 +470,23 @@ class SentencesProcessor:
         overwrite_labels=False,
         overwrite_examples=False,
     ):
-        r"""Primary method of adding example sets of texts, labels, ids, and targets
-        to the ``SentencesProcessor``
+        """Primary method of adding example sets of texts, labels, ids, and targets to the ``SentencesProcessor``
 
         Arguments:
             texts (list): A list of documents where each document is a list of sentences where each
                 sentence is a list of tokens. This is the output of `convert_to_extractive.py`
-                and is in the 'src' field for each doc. See
-                :meth:`extractive.ExtractiveSummarizer.prepare_data`.
-            labels (list, optional): A list of the labels for each document where each label is a
-                list of labels where the index of the label coresponds with the index of the
-                sentence in the respective entry in `texts.` Similarly to `texts`, this is handled
-                automatically by `ExtractiveSummarizer.prepare_data`. Default is None.
-            ids (list, optional): A list of ids for each document. Not used by
-                `ExtractiveSummarizer`. Default is None.
-            oracle_ids (list, optional): Similar to labels but is a list of indexes of the chosen
-                sentences instead of a one-hot encoded vector. These will be converted to labels.
-                Default is None.
-            targets (list, optional): A list of the abstractive target for each document.
-                Default is None.
-            overwrite_labels (bool, optional): Replace any labels currently stored by the
-                ``SentencesProcessor``. Default is False.
-            overwrite_examples (bool, optional): Replace any examples currently stored by the
-                ``SentencesProcessor``. Default is False.
+                and is in the 'src' field for each doc. See :meth:`extractive.ExtractiveSummarizer.prepare_data`.
+            labels (list, optional): A list of the labels for each document where each label is a list of labels where
+            the index of the label coresponds with the index of the sentence in the respective entry in `texts.`
+            Similarly to `texts`, this is handled automatically by `ExtractiveSummarizer.prepare_data`. Default is None.
+            ids (list, optional): A list of ids for each document. Not used by `ExtractiveSummarizer`. Default is None.
+            oracle_ids (list, optional): Similar to labels but is a list of indexes of the chosen sentences instead of
+            a one-hot encoded vector. These will be converted to labels. Default is None.
+            targets (list, optional): A list of the abstractive target for each document. Default is None.
+            overwrite_labels (bool, optional): Replace any labels currently stored by the``SentencesProcessor``.
+            Default is False.
+            overwrite_examples (bool, optional): Replace any examples currently stored by the ``SentencesProcessor``.
+            Default is False.
 
         Returns:
             list: The examples as ``InputExample``\ s that have been added.
@@ -710,7 +700,6 @@ class SentencesProcessor:
         create_segment_ids="binary",
         segment_token_id=None,
         create_source=False,
-        n_process=2,
         max_length=None,
         pad_on_left=False,
         pad_token=0,
@@ -722,7 +711,7 @@ class SentencesProcessor:
         save_to_name=None,
         save_as_type="txt",
     ):
-        r"""Convert the examples stored by the ``SentencesProcessor`` to features that can be used
+        """Convert the examples stored by the ``SentencesProcessor`` to features that can be used
         by a model. The following processes can be performed: tokenization, token type ids (to
         separate sentences), sentence representation token ids (the locations of each sentence
         representation token), sentence lengths, and the attention mask. Padding can be applied to
@@ -766,9 +755,6 @@ class SentencesProcessor:
                 is a terrible idea for obvious reasons. Default is '[SEP]' token id.
             create_source (bool, optional): Option to save the source text (non-tokenized) as a
                 string. Default is False.
-            n_process (int, optional): How many processes to use for multithreading for running
-                get_features_process(). Set higher to run faster and set lower is you experience
-                OOM issues. Default is 2.
             max_length (int, optional): If ``pad_ids_and_attention`` is True then pad to this
                 amount. Default is ``tokenizer.max_len``.
             pad_on_left (bool, optional): Optionally, pad on the left instead of right. Default
@@ -843,7 +829,6 @@ class SentencesProcessor:
                 segment_token_id = tokenizer.sep_token_id
 
         features = []
-        pool = Pool(n_process)
         _get_features_process = partial(
             self.get_features_process,
             num_examples=len(self.labels),
@@ -865,14 +850,11 @@ class SentencesProcessor:
             pad_ids_and_attention=pad_ids_and_attention,
         )
 
-        for rtn_features in pool.map(
+        for rtn_features in map(
             _get_features_process,
             zip(range(len(self.labels)), self.examples, self.labels),
         ):
             features.append(rtn_features)
-
-        pool.close()
-        pool.join()
 
         if not return_type:
             return features
