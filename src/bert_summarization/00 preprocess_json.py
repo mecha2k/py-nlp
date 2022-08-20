@@ -78,7 +78,7 @@ if __name__ == "__main__":
             )
             sys.exit(1)
 
-        json_files = sorted(json_files)[:1]
+        json_files = sorted(json_files)[:3]
 
         num_files = len(json_files)
         for inputs in enumerate(json_files):

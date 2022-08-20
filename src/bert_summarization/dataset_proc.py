@@ -179,9 +179,9 @@ class FSDataset(torch.utils.data.Dataset):
         line_str = linecache.getline(file_path, linecache_index).rstrip("\n")
         try:
             line_json = json.loads(line_str)
-        except Exception:
+        except Exception as e:
             line_json = None
-            print("** JSON Loading Error **")
+            print(f"** JSON Loading Error ** : {e}")
             print(file_path)
             print(index)
             print(linecache_index)
