@@ -624,7 +624,6 @@ class ExtractiveSummarizer(pl.LightningModule):
         train_dataset = self.datasets[self.hparams.train_name]
         train_dataloader = DataLoader(
             train_dataset,
-            num_workers=self.hparams.dataloader_num_workers,
             # sampler=train_sampler,
             batch_size=self.hparams.batch_size,
             collate_fn=self.pad_batch_collate,
@@ -638,7 +637,6 @@ class ExtractiveSummarizer(pl.LightningModule):
         valid_dataset = self.datasets[self.hparams.val_name]
         valid_dataloader = DataLoader(
             valid_dataset,
-            num_workers=self.hparams.dataloader_num_workers,
             # sampler=valid_sampler,
             batch_size=self.hparams.batch_size,
             collate_fn=self.pad_batch_collate,
@@ -652,7 +650,6 @@ class ExtractiveSummarizer(pl.LightningModule):
         test_dataset = self.datasets[self.hparams.test_name]
         test_dataloader = DataLoader(
             test_dataset,
-            num_workers=self.hparams.dataloader_num_workers,
             # sampler=test_sampler,
             batch_size=self.hparams.batch_size,
             collate_fn=self.pad_batch_collate,

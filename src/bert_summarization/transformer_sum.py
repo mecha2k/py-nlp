@@ -6,8 +6,10 @@ import seaborn as sns
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+import transformers
 import glob
 import logging
+import warnings
 import os
 
 from torch.optim import Adam
@@ -23,6 +25,8 @@ from helpers import load_json, generic_configure_optimizers
 
 
 logger = logging.getLogger(__name__)
+warnings.filterwarnings("ignore", category=Warning)
+transformers.logging.set_verbosity_error()
 
 
 class Pooling(nn.Module):
@@ -181,7 +185,7 @@ class ExtractiveSummarization(LightningModule):
 
     def compute_loss(self, outputs, labels, mask):
         try:
-            loss = self.loss_func(outputs, labels.float())
+            loss = self.loss_fn(outputs, labels.float())
         except ValueError as e:
             logger.error(e)
             logger.error(
@@ -255,9 +259,14 @@ class ExtractiveSummarization(LightningModule):
 
 if __name__ == "__main__":
     hparams = Namespace(
-        epochs=1,
+        max_epochs=10,
         batch_size=8,
         learning_rate=2e-5,
+        weight_decay=0.01,
+        adam_epsilon=1e-8,
+        optimizer_type="adam",
+        use_scheduler=False,
+        loss_key="loss_avg",
         max_steps=1000,
         model_name="bert-base-uncased",
         model_type="bert",
@@ -269,6 +278,7 @@ if __name__ == "__main__":
         dataloader_type="map",
         create_token_type_ids="binary",
         max_seq_length=512,
+        accumulate_grad_batches=1,
     )
     print("num_epochs : ", getattr(hparams, "epochs", 1))
 
@@ -284,6 +294,13 @@ if __name__ == "__main__":
 
     model = ExtractiveSummarization(hparams=hparams)
     trainer = Trainer(
-        max_epochs=hparams.epochs, callbacks=callbacks, accelerator="auto", devices="auto"
+        default_root_dir="../data/cnn_daily",
+        max_steps=hparams.max_steps,
+        callbacks=callbacks,
+        accelerator="auto",
+        devices="auto",
     )
+
+    torch.set_num_threads(16)
+    torch.set_num_interop_threads(16)
     trainer.fit(model)
