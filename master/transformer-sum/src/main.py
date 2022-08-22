@@ -20,7 +20,6 @@ from helpers import StepCheckpointCallback
 
 
 logger = logging.getLogger(__name__)
-_path = "../../../src/data/cnn_daily/cnn_dm"
 
 
 def set_seed(seed):
@@ -35,9 +34,6 @@ def set_seed(seed):
         + "processed batch items per second) can be lower than when the model is "
         + "non-deterministic."
     )
-
-
-_path = "../../../src/data/cnn_daily/cnn_dm"
 
 
 def main(args):

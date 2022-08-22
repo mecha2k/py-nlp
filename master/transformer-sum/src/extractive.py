@@ -515,6 +515,9 @@ class ExtractiveSummarizer(pl.LightningModule):
                     )
                     sys.exit(1)
 
+                json_files = sorted(json_files)[:1]
+                logger.info(f"{json_files}")
+
                 if self.hparams.preprocess_resume:
                     completed_files = [
                         os.path.splitext(os.path.basename(i))[0] for i in dataset_files

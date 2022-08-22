@@ -2,16 +2,20 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import logging
 
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+import glob
+import logging
+import os
 
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoConfig, AutoModel, AutoTokenizer
 from transformers.data.metrics import acc_and_f1
+from pytorch_lightning import LightningModule, Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from argparse import Namespace
 
 from dataset_proc import SentencesProcessor, FSDataset, FSIterableDataset, pad_batch_collate
@@ -19,20 +23,6 @@ from helpers import load_json, generic_configure_optimizers
 
 
 logger = logging.getLogger(__name__)
-
-args = Namespace(
-    epochs=10,
-    batch_size=1,
-    learning_rate=0.1,
-    model_name="bert-base-uncased",
-    model_type="bert",
-    no_use_token_type_ids=True,
-    tokenizer_use_fast=True,
-    gradient_checkpointing=False,
-    tokenizer_no_use_fast=False,
-    data_type="none",
-)
-print(getattr(args, "epochs", 1))
 
 
 class Pooling(nn.Module):
@@ -100,7 +90,7 @@ class SimpleLinearClassifier(nn.Module):
         return sentence_scores
 
 
-class ExtractiveSummarization(pl.LightningModule):
+class ExtractiveSummarization(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         self.save_hyperparameters(hparams)
@@ -144,11 +134,10 @@ class ExtractiveSummarization(pl.LightningModule):
                 os.path.join(hparams.data_path, "*" + data_type + ".*." + inferred_type)
             )
             datasets[data_type] = FSDataset(dataset_files, verbose=True)
-
-        self.pad_batch_collate = pad_batch_collate
+        self.datasets = datasets
 
     def setup(self, stage=None):
-        if stage == "fit" and not resuming:
+        if stage == "fit" or stage is None:
             logger.info("Loading `word_embedding_model` pre-trained weights.")
             self.model = AutoModel.from_pretrained(
                 self.hparams.model_name, config=self.model.config
@@ -260,9 +249,41 @@ class ExtractiveSummarization(pl.LightningModule):
 
     def configure_optimizers(self):
         return generic_configure_optimizers(
-            self.hparams, self.train_dataloader_object, self.named_parameters()
+            self.hparams, self.train_dataloader(), self.named_parameters()
         )
 
 
 if __name__ == "__main__":
-    pass
+    hparams = Namespace(
+        epochs=1,
+        batch_size=8,
+        learning_rate=2e-5,
+        max_steps=1000,
+        model_name="bert-base-uncased",
+        model_type="bert",
+        use_token_type_ids=False,
+        tokenizer_use_fast=True,
+        gradient_checkpointing=False,
+        data_path="../data/cnn_daily/cnn_dm/json.gz",
+        data_type="txt",
+        dataloader_type="map",
+        create_token_type_ids="binary",
+        max_seq_length=512,
+    )
+    print("num_epochs : ", getattr(hparams, "epochs", 1))
+
+    model_checkpoint = ModelCheckpoint(
+        dirpath="../data/cnn_daily/checkpoints",
+        monitor="val_loss",
+        save_top_k=-1,
+        every_n_epochs=1,
+        verbose=True,
+    )
+    lr_monitor = LearningRateMonitor(logging_interval="step")
+    callbacks = [model_checkpoint, lr_monitor]
+
+    model = ExtractiveSummarization(hparams=hparams)
+    trainer = Trainer(
+        max_epochs=hparams.epochs, callbacks=callbacks, accelerator="auto", devices="auto"
+    )
+    trainer.fit(model)
