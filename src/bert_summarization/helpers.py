@@ -19,16 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 def load_json(json_file):
-    """Load a json file even if it is compressed with gzip.
-
-    Args:
-        json_file (str): Path to json file
-
-    Returns:
-        tuple: (documents, file_path), loaded json and path to file
-    """
-    # `file_extension` is second and path (without extension) is first
-    # `file_extension` only contains last extension so ".json.gz" will output ".gz"
     documents = None
     file_path, file_extension = os.path.splitext(json_file)
     if file_extension == ".json":
@@ -90,11 +80,9 @@ def lr_lambda_func(current_step, num_warmup_steps, num_training_steps):
 def block_trigrams(candidate, prediction):
     """Decrease repetition in summaries by checking if a trigram from ``prediction``
     exists in ``candidate``
-
     Args:
         candidate (str): The string to check for trigrams from ``prediction``
         prediction (list): A list of strings to extract trigrams from
-
     Returns:
         bool: True if overlapping trigrams detected, False otherwise.
     """
@@ -108,11 +96,9 @@ def block_trigrams(candidate, prediction):
 
 def _get_ngrams(n, text):
     """Calculates n-grams.
-
     Args:
         n (int): which n-grams to calculate
         text (list): An array of tokens
-
     Returns:
         A set of n-grams
     """
@@ -185,14 +171,12 @@ def test_rouge(temp_dir, cand, ref):
     the "<q>" token is used in the text files and is converted to a newline in this function.
     Using "<q>" instead of ``\\n`` also makes it easier to store the ground-truth summaries
     in the ``convert_to_extractive.py`` script.
-
     Args:
         temp_dir (str): A temporary folder to store files for input to the ROUGE script.
         cand (str): The path to the file containing one candidate summary per line with
             "<q>" tokens in between each sentence.
         ref (str): The path to the file containing one ground-truth/gold summary per line
             with "<q>" tokens in between each sentence.
-
     Returns:
         dict: Results from the ROUGE script as a python dictionary.
     """

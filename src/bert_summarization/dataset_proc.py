@@ -471,7 +471,6 @@ class SentencesProcessor:
         overwrite_examples=False,
     ):
         """Primary method of adding example sets of texts, labels, ids, and targets to the ``SentencesProcessor``
-
         Arguments:
             texts (list): A list of documents where each document is a list of sentences where each
                 sentence is a list of tokens. This is the output of `convert_to_extractive.py`

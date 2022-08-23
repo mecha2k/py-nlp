@@ -107,13 +107,13 @@ class ExtractiveSummarization(LightningModule):
 
         if (
             any(x in hparams.model_name for x in ["roberta", "distil", "longformer"])
-        ) and not hparams.no_use_token_type_ids:
+        ) and hparams.use_token_type_ids:
             logger.warning(
                 "You are using a %s model but did not set --no_use_token_type_ids. This model does not support "
                 + "`token_type_ids` so this option has been automatically enabled.",
                 hparams.model_type,
             )
-            self.hparams.no_use_token_type_ids = True
+            self.hparams.use_token_type_ids = True
 
         self.pooling = Pooling(sent_rep_tokens=True, mean_tokens=False, max_tokens=False)
         self.encoder = SimpleLinearClassifier(self.model.config.hidden_size)
@@ -143,9 +143,6 @@ class ExtractiveSummarization(LightningModule):
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
             logger.info("Loading `word_embedding_model` pre-trained weights.")
-            self.model = AutoModel.from_pretrained(
-                self.hparams.model_name, config=self.model.config
-            )
 
     def train_dataloader(self):
         return DataLoader(
@@ -187,11 +184,11 @@ class ExtractiveSummarization(LightningModule):
         try:
             loss = self.loss_fn(outputs, labels.float())
         except ValueError as e:
-            logger.error(e)
             logger.error(
                 "Details about above error:\n1. outputs=%s\n2. labels.float()=%s",
                 outputs,
                 labels.float(),
+                e,
             )
             sys.exit(1)
 
@@ -273,6 +270,7 @@ if __name__ == "__main__":
         use_token_type_ids=False,
         tokenizer_use_fast=True,
         gradient_checkpointing=False,
+        default_root_dir="../data/cnn_daily",
         data_path="../data/cnn_daily/cnn_dm/json.gz",
         data_type="txt",
         dataloader_type="map",
@@ -294,13 +292,11 @@ if __name__ == "__main__":
 
     model = ExtractiveSummarization(hparams=hparams)
     trainer = Trainer(
-        default_root_dir="../data/cnn_daily",
+        default_root_dir=hparams.default_root_dir,
         max_steps=hparams.max_steps,
         callbacks=callbacks,
         accelerator="auto",
         devices="auto",
     )
 
-    torch.set_num_threads(16)
-    torch.set_num_interop_threads(16)
     trainer.fit(model)
