@@ -78,9 +78,7 @@ def pad_batch_collate(batch, modifier=None):
         if key == "input_ids":
             input_ids = feature_list
 
-            # Attention
-            # The mask has 1 for real tokens and 0 for padding tokens. Only real
-            # tokens are attended to.
+            # The mask has 1 for real tokens and 0 for padding tokens. Only real tokens are attended to.
             attention_mask = [[1] * len(ids) for ids in input_ids]
 
             input_ids_width = max(len(ids) for ids in input_ids)
@@ -628,14 +626,12 @@ class SentencesProcessor:
                         sent_lengths.insert(0, sent_rep_ids[0] + 1)
 
         # Attention
-        # The mask has 1 for real tokens and 0 for padding tokens. Only real
-        # tokens are attended to.
+        # The mask has 1 for real tokens and 0 for padding tokens. Only real tokens are attended to.
         attention_mask = None
         if create_attention_mask:
             attention_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
 
-        # Padding
-        # Zero-pad up to the sequence length.
+        # Padding : Zero-pad up to the sequence length.
         if pad_ids_and_attention:
             padding_length = max_length - len(input_ids)
             if pad_on_left:

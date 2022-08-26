@@ -170,6 +170,8 @@ class ExtractiveSummarization(LightningModule):
             inputs["token_type_ids"] = token_type_ids
 
         outputs = self.model(**inputs, **kwargs)
+        print(outputs[0].shape)
+        print(outputs[1].shape)
         sents_vector, mask = self.pooling(
             word_vectors=outputs[0],
             sent_rep_token_ids=sent_rep_token_ids,
@@ -226,6 +228,8 @@ class ExtractiveSummarization(LightningModule):
     def training_step(self, batch, batch_idx):
         labels = batch["labels"]
         del batch["labels"]
+        print(batch["attention_mask"][0])
+        print(batch["token_type_ids"][0])
 
         outputs, mask = self.forward(**batch)
 
@@ -267,7 +271,7 @@ if __name__ == "__main__":
         max_steps=1000,
         model_name="bert-base-uncased",
         model_type="bert",
-        use_token_type_ids=False,
+        use_token_type_ids=True,
         tokenizer_use_fast=True,
         gradient_checkpointing=False,
         default_root_dir="../data/cnn_daily",
