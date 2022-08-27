@@ -74,65 +74,98 @@ class CnnDataModule(LightningDataModule):
         attention_mask = [[1] * len(input_id) for input_id in input_ids]
         token_type_ids = [item["token_type_ids"] for item in batch]
         sent_rep_token_ids = [item["sent_rep_token_ids"] for item in batch]
-        sent_lengths = [item["sent_lengths"] for item in batch]
         labels = [item["labels"] for item in batch]
 
         input_ids = pad_sequences(input_ids, maxlen=self.max_seq_len, padding="post")
         attention_mask = pad_sequences(attention_mask, maxlen=self.max_seq_len, padding="post")
         token_type_ids = pad_sequences(token_type_ids, maxlen=self.max_seq_len, padding="post")
         sent_rep_token_ids = pad_sequences(sent_rep_token_ids, padding="post", value=-1)
-        sent_lengths = pad_sequences(sent_lengths, padding="post")
         labels = pad_sequences(labels, padding="post")
 
-        sent_rep_mask = ~(sent_rep_token_ids == -1)
-        sent_rep_token_ids[~sent_rep_mask] = 0
+        sent_rep_masks = ~(sent_rep_token_ids == -1)
+        sent_rep_token_ids[~sent_rep_masks] = 0
 
         return {
             "input_ids": torch.Tensor(input_ids),
             "attention_mask": torch.Tensor(attention_mask),
             "token_type_ids": torch.Tensor(token_type_ids),
             "sent_rep_token_ids": torch.Tensor(sent_rep_token_ids),
-            "sent_lengths": torch.Tensor(sent_lengths),
+            "sent_rep_masks": torch.Tensor(sent_rep_masks),
             "labels": torch.Tensor(labels),
         }
+
+
+class SimpleLinearClassifier(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.linear = nn.Linear(hidden_size, 1)
+
+    def forward(self, x, masks):
+        x = self.linear(x).squeeze(-1)
+        sentence_scores = x * masks.float()
+        sentence_scores[sentence_scores == 0] = -1e10
+        return sentence_scores
 
 
 class ExtractiveSummarization(LightningModule):
     def __init__(self, hparams: Namespace) -> None:
         super().__init__()
         self.save_hyperparameters(hparams)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.hparams["model_name"])
-        self.model = AutoModel.from_pretrained(self.hparams["model_name"])
-        self.model.eval()
-        self.loss_fn = nn.CrossEntropyLoss()
-        self.optimizer = Adam(self.model.parameters(), lr=self.hparams["learning_rate"])
+        self.tokenizer = AutoTokenizer.from_pretrained(self.hparams.model_name, use_fast=True)
+        self.model = AutoModel.from_pretrained(self.hparams.model_name)
+        self.classifier = SimpleLinearClassifier(self.model.config.hidden_size)
+        self.loss_fn = nn.BCEWithLogitsLoss(reduction="none")
 
-    def forward(
-        self,
-        word_vectors: torch.Tensor,
-        sent_rep_token_ids: torch.Tensor,
-        sent_rep_mask: torch.Tensor,
-    ) -> torch.Tensor:
-        output_vectors, output_masks = [], []
-        sents_vec = word_vectors[
-            torch.arange(word_vectors.size(0)).unsqueeze(1), sent_rep_token_ids
+    def forward(self, batch: dict, **kwargs) -> torch.Tensor:
+        inputs = {
+            "input_ids": batch["input_ids"],
+            "attention_mask": batch["attention_mask"],
+            "token_type_ids": batch["token_type_ids"],
+        }
+
+        outputs, _ = self.model(**inputs, **kwargs)
+        sentence_vectors = outputs[
+            torch.arange(outputs.size(0)).unsqueeze(1), batch["sent_rep_token_ids"]
         ]
-        sents_vec = sents_vec * sent_rep_mask[:, :, None].float()
-        output_vectors.append(sents_vec)
-        output_masks.append(sent_rep_mask)
+        sentence_vectors = sentence_vectors * batch["sent_rep_masks"][:, :, None].float()
+        sentence_scores = self.classifier(sentence_vectors, batch["sent_rep_masks"])
 
-        return torch.cat(output_vectors, 1), torch.cat(output_masks, 1)
+        return sentence_scores
+
+    def compute_loss(self, output, labels, masks):
+        loss = self.loss_fn(outputs, labels.float()) * mask.float()
+
+        sum_loss_per_sequence = loss.sum(dim=1)
+        num_not_padded_per_sequence = mask.sum(dim=1).float()
+        average_per_sequence = sum_loss_per_sequence / num_not_padded_per_sequence
+
+        sum_avg_seq_loss = average_per_sequence.sum()
+        batch_size = average_per_sequence.size(0)
+        mean_avg_seq_loss = sum_avg_seq_loss / batch_size
+
+        total_loss = sum_loss_per_sequence.sum()
+        total_num_not_padded = num_not_padded_per_sequence.sum().float()
+        average_loss = total_loss / total_num_not_padded
+        total_norm_batch_loss = total_loss / batch_size
+
+        return (
+            total_loss,
+            total_norm_batch_loss,
+            sum_avg_seq_loss,
+            mean_avg_seq_loss,
+            average_loss,
+        )
 
     def training_step(self, batch, batch_idx) -> dict:
-        word_vectors, sent_rep_token_ids, sent_rep_mask = batch
-        output_vectors, output_masks = self.forward(word_vectors, sent_rep_token_ids, sent_rep_mask)
-        loss = self.loss_fn(output_vectors, sent_rep_token_ids)
-        tensorboard_logs = {"train_loss": loss}
-        return {"loss": loss, "log": tensorboard_logs}
+        labels = batch["labels"]
+        masks = batch["sent_rep_masks"]
+        outputs = self.forward(**batch)
+        loss = self.compute_loss(outputs, labels, masks)
+
+        return {"loss_tot": loss[0]}
 
     def validation_step(self, batch, batch_idx) -> dict:
-        word_vectors, sent_rep_token_ids, sent_rep_mask = batch
-        return word_vectors, sent_rep_token_ids, sent_rep_mask
+        pass
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
