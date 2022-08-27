@@ -23,6 +23,6 @@ data_types = ["val", "test", "train"]
 for data_type in data_types:
     datasets = np.load(f"../data/cnn_daily/cnn_dm/datasets_{data_type}.npy", allow_pickle=True)
     print(datasets.shape)
-    datasets_small = datasets[:10000]
+    datasets_small = datasets[:1000]
     np.save(f"../data/cnn_daily/cnn_dm/datasets_{data_type}_small.npy", datasets_small)
     print(datasets_small.shape)
