@@ -1,16 +1,19 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 import transformers
 import warnings
 import logging
+import os
 
 from torch.optim import Adam
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 from transformers import AutoTokenizer, AutoModel, AutoConfig
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 from argparse import Namespace
 
 
@@ -20,33 +23,78 @@ transformers.logging.set_verbosity_error()
 
 
 class CnnDataModule(LightningDataModule):
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: str, batch_size: int, max_seq_len: int) -> None:
         super().__init__()
         self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.max_seq_len = max_seq_len
         self.datasets = dict()
 
     def prepare_data(self) -> None:
         datasets = dict()
         data_types = ["train", "val", "test"]
         for data_type in data_types:
-            inferred_type = "txt"
-            dataset_files = glob.glob(
-                os.path.join(hparams.data_path, "*" + data_type + ".*." + inferred_type)
+            datasets[data_type] = np.load(
+                os.path.join(self.data_dir, f"datasets_{data_type}_small.npy"), allow_pickle=True
             )
-            datasets[data_type] = FSDataset(dataset_files, verbose=True)
         self.datasets = datasets
 
     def setup(self, stage=None) -> None:
-        pass
+        if stage == "fit" or stage is None:
+            logger.info("Loading train data...")
+        if stage == "test" or stage is None:
+            logger.info("Loading test data...")
 
     def train_dataloader(self) -> DataLoader:
-        pass
+        return DataLoader(
+            self.datasets["train"],
+            batch_size=self.batch_size,
+            shuffle=True,
+            collate_fn=self.collate_fn,
+        )
 
     def val_dataloader(self) -> DataLoader:
-        pass
+        return DataLoader(
+            self.datasets["val"],
+            batch_size=self.batch_size,
+            shuffle=True,
+            collate_fn=self.collate_fn,
+        )
 
     def test_dataloader(self) -> DataLoader:
-        pass
+        return DataLoader(
+            self.datasets["test"],
+            batch_size=self.batch_size,
+            shuffle=True,
+            collate_fn=self.collate_fn,
+        )
+
+    def collate_fn(self, batch):
+        input_ids = [item["input_ids"] for item in batch]
+        attention_mask = [[1] * len(input_id) for input_id in input_ids]
+        token_type_ids = [item["token_type_ids"] for item in batch]
+        sent_rep_token_ids = [item["sent_rep_token_ids"] for item in batch]
+        sent_lengths = [item["sent_lengths"] for item in batch]
+        labels = [item["labels"] for item in batch]
+
+        input_ids = pad_sequences(input_ids, maxlen=self.max_seq_len, padding="post")
+        attention_mask = pad_sequences(attention_mask, maxlen=self.max_seq_len, padding="post")
+        token_type_ids = pad_sequences(token_type_ids, maxlen=self.max_seq_len, padding="post")
+        sent_rep_token_ids = pad_sequences(sent_rep_token_ids, padding="post", value=-1)
+        sent_lengths = pad_sequences(sent_lengths, padding="post")
+        labels = pad_sequences(labels, padding="post")
+
+        sent_rep_mask = ~(sent_rep_token_ids == -1)
+        sent_rep_token_ids[~sent_rep_mask] = 0
+
+        return {
+            "input_ids": torch.Tensor(input_ids),
+            "attention_mask": torch.Tensor(attention_mask),
+            "token_type_ids": torch.Tensor(token_type_ids),
+            "sent_rep_token_ids": torch.Tensor(sent_rep_token_ids),
+            "sent_lengths": torch.Tensor(sent_lengths),
+            "labels": torch.Tensor(labels),
+        }
 
 
 class ExtractiveSummarization(LightningModule):
@@ -92,18 +140,20 @@ class ExtractiveSummarization(LightningModule):
 
 if __name__ == "__main__":
     hparams = Namespace(
-        data_dir="../data/cnn_daily/cnn_dm/json.gz",
+        data_dir="../data/cnn_daily/cnn_dm/",
         model_name="bert-base-uncased",
         learning_rate=1e-5,
         batch_size=32,
         num_epochs=1,
         num_workers=0,
-        max_seq_length=512,
-        max_summary_length=64,
+        max_seq_len=512,
+        max_summary_len=64,
     )
 
-    cnn_dm = CnnDataModule(data_dir=hparams.data_dir)
-    model = ExtractiveSummarization(hparams)
+    cnn_dm = CnnDataModule(
+        data_dir=hparams.data_dir, batch_size=hparams.batch_size, max_seq_len=hparams.max_seq_len
+    )
+    model = ExtractiveSummarization(hparams=hparams)
     trainer = Trainer(
         max_epochs=1,
         max_steps=10,
