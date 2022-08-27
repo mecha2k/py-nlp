@@ -22,6 +22,7 @@ from argparse import Namespace
 
 from dataset_proc import SentencesProcessor, FSDataset, FSIterableDataset, pad_batch_collate
 from helpers import load_json, generic_configure_optimizers
+from icecream import ic
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,9 @@ class Pooling(nn.Module):
                 torch.arange(word_vectors.size(0)).unsqueeze(1), sent_rep_token_ids
             ]
             sents_vec = sents_vec * sent_rep_mask[:, :, None].float()
+            print(sent_rep_token_ids[0])
+            print(sents_vec[0])
+            print(sents_vec[0].shape)
             output_vectors.append(sents_vec)
             output_masks.append(sent_rep_mask)
 

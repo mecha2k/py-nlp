@@ -18,8 +18,6 @@ def forward(
     word_vectors=None,
     sent_rep_token_ids=None,
     sent_rep_mask=None,
-    sent_lengths=None,
-    sent_lengths_mask=None,
 ):
     output_vectors, output_masks = [], []
     sents_vec = word_vectors[torch.arange(word_vectors.size(0)).unsqueeze(1), sent_rep_token_ids]
@@ -70,11 +68,12 @@ for idx, seg in enumerate(sent_lengths):
     ic(idx, seg)
     ic(word_vectors[idx])
     splitted = torch.split(word_vectors[idx], [4, 1, max_seq_length - 4 - 1])
-    ic(splitted[0])
+    ic(splitted)
     splitted = torch.split(word_vectors[idx], seg.tolist())
     ic(len(word_vectors[idx]))
     ic(splitted[0])
     ic(len(splitted))
+    break
 
 
 batch_sequences = [
@@ -83,5 +82,5 @@ batch_sequences = [
 ic(len(batch_sequences))
 
 
-pooling = forward(word_vectors, sent_rep_token_ids, sent_rep_mask, sent_lengths, sent_lengths_mask)
+pooling = forward(word_vectors, sent_rep_token_ids, sent_rep_mask)
 ic(pooling)
