@@ -86,12 +86,12 @@ class CnnDataModule(LightningDataModule):
         sent_rep_token_ids[~sent_rep_masks] = 0
 
         return {
-            "input_ids": torch.Tensor(input_ids),
-            "attention_mask": torch.Tensor(attention_mask),
-            "token_type_ids": torch.Tensor(token_type_ids),
-            "sent_rep_token_ids": torch.Tensor(sent_rep_token_ids),
-            "sent_rep_masks": torch.Tensor(sent_rep_masks),
-            "labels": torch.Tensor(labels),
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
+            "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+            "token_type_ids": torch.tensor(token_type_ids, dtype=torch.long),
+            "sent_rep_token_ids": torch.tensor(sent_rep_token_ids, dtype=torch.long),
+            "sent_rep_masks": torch.tensor(sent_rep_masks, dtype=torch.bool),
+            "labels": torch.tensor(labels, dtype=torch.long),
         }
 
 
@@ -116,27 +116,30 @@ class ExtractiveSummarization(LightningModule):
         self.classifier = SimpleLinearClassifier(self.model.config.hidden_size)
         self.loss_fn = nn.BCEWithLogitsLoss(reduction="none")
 
-    def forward(self, batch: dict, **kwargs) -> torch.Tensor:
+    def forward(
+        self, input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
+    ) -> torch.Tensor:
         inputs = {
-            "input_ids": batch["input_ids"],
-            "attention_mask": batch["attention_mask"],
-            "token_type_ids": batch["token_type_ids"],
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids,
         }
 
-        outputs, _ = self.model(**inputs, **kwargs)
-        sentence_vectors = outputs[
-            torch.arange(outputs.size(0)).unsqueeze(1), batch["sent_rep_token_ids"]
+        outputs = self.model(**inputs)
+        hidden_states = outputs[0]
+        sentence_vectors = hidden_states[
+            torch.arange(hidden_states.size(0)).unsqueeze(dim=1), sent_rep_token_ids
         ]
-        sentence_vectors = sentence_vectors * batch["sent_rep_masks"][:, :, None].float()
-        sentence_scores = self.classifier(sentence_vectors, batch["sent_rep_masks"])
+        sentence_vectors = sentence_vectors * sent_rep_masks[:, :, None].float()
+        sentence_scores = self.classifier(sentence_vectors, sent_rep_masks)
 
         return sentence_scores
 
-    def compute_loss(self, output, labels, masks):
-        loss = self.loss_fn(outputs, labels.float()) * mask.float()
+    def compute_loss(self, outputs, labels, masks):
+        loss = self.loss_fn(outputs, labels.float()) * masks.float()
 
         sum_loss_per_sequence = loss.sum(dim=1)
-        num_not_padded_per_sequence = mask.sum(dim=1).float()
+        num_not_padded_per_sequence = masks.sum(dim=1).float()
         average_per_sequence = sum_loss_per_sequence / num_not_padded_per_sequence
 
         sum_avg_seq_loss = average_per_sequence.sum()
@@ -157,15 +160,32 @@ class ExtractiveSummarization(LightningModule):
         )
 
     def training_step(self, batch, batch_idx) -> dict:
+        input_ids = batch["input_ids"]
+        attention_mask = batch["attention_mask"]
+        token_type_ids = batch["token_type_ids"]
+        sent_rep_token_ids = batch["sent_rep_token_ids"]
+        sent_rep_masks = batch["sent_rep_masks"]
         labels = batch["labels"]
-        masks = batch["sent_rep_masks"]
-        outputs = self.forward(**batch)
-        loss = self.compute_loss(outputs, labels, masks)
+        outputs = self(
+            input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
+        )
+        loss = self.compute_loss(outputs, labels, sent_rep_masks)
 
         return {"loss_tot": loss[0]}
 
     def validation_step(self, batch, batch_idx) -> dict:
-        pass
+        input_ids = batch["input_ids"]
+        attention_mask = batch["attention_mask"]
+        token_type_ids = batch["token_type_ids"]
+        sent_rep_token_ids = batch["sent_rep_token_ids"]
+        sent_rep_masks = batch["sent_rep_masks"]
+        labels = batch["labels"]
+        outputs = self(
+            input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
+        )
+        loss = self.compute_loss(outputs, labels, sent_rep_masks)
+
+        return {"loss_tot": loss[0]}
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
@@ -177,8 +197,7 @@ if __name__ == "__main__":
         model_name="bert-base-uncased",
         learning_rate=1e-5,
         batch_size=32,
-        num_epochs=1,
-        num_workers=0,
+        num_epochs=100,
         max_seq_len=512,
         max_summary_len=64,
     )
@@ -188,8 +207,8 @@ if __name__ == "__main__":
     )
     model = ExtractiveSummarization(hparams=hparams)
     trainer = Trainer(
-        max_epochs=1,
-        max_steps=10,
+        max_epochs=hparams.num_epochs,
+        max_steps=1000,
         accelerator="auto",
         devices="auto",
         callbacks=[TQDMProgressBar(refresh_rate=20)],
