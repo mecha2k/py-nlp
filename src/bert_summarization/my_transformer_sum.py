@@ -7,12 +7,12 @@ import warnings
 import logging
 import os
 
-from torch.optim import Adam
+from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 from transformers import AutoTokenizer, AutoModel, AutoConfig
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from argparse import Namespace
 
@@ -170,8 +170,9 @@ class ExtractiveSummarization(LightningModule):
             input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
         )
         loss = self.compute_loss(outputs, labels, sent_rep_masks)
+        self.log("train_loss", loss[0])
 
-        return {"loss_tot": loss[0]}
+        return {"loss": loss[0]}
 
     def validation_step(self, batch, batch_idx) -> dict:
         input_ids = batch["input_ids"]
@@ -184,33 +185,64 @@ class ExtractiveSummarization(LightningModule):
             input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
         )
         loss = self.compute_loss(outputs, labels, sent_rep_masks)
-
-        return {"loss_tot": loss[0]}
+        self.log("val_loss", loss[0], prog_bar=True)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+        no_decay = ["bias", "LayerNorm.weight"]
+        params_decay = [
+            p for n, p in self.named_parameters() if not any(nd in n for nd in no_decay)
+        ]
+        params_no_decay = [p for n, p in self.named_parameters() if any(nd in n for nd in no_decay)]
+        parameters = [
+            {"params": params_decay, "weight_decay": self.hparams.weight_decay},
+            {"params": params_no_decay, "weight_decay": 0.0},
+        ]
+        return torch.optim.AdamW(parameters, lr=self.hparams.learning_rate, eps=1e-8)
 
 
 if __name__ == "__main__":
     hparams = Namespace(
         data_dir="../data/cnn_daily/cnn_dm/",
+        model_dir="../data/cnn_daily/checkpoints/",
+        model_file="../data/cnn_daily/checkpoints/my-bert-base-uncased.ckpt",
+        load_from_checkpoint=True,
         model_name="bert-base-uncased",
         learning_rate=1e-5,
         batch_size=32,
         num_epochs=100,
         max_seq_len=512,
-        max_summary_len=64,
+        weight_decay=0.01,
     )
 
     cnn_dm = CnnDataModule(
         data_dir=hparams.data_dir, batch_size=hparams.batch_size, max_seq_len=hparams.max_seq_len
     )
-    model = ExtractiveSummarization(hparams=hparams)
+
+    if hparams.load_from_checkpoint:
+        model = ExtractiveSummarization.load_from_checkpoint(hparams.model_file)
+    else:
+        model = ExtractiveSummarization(hparams=hparams)
+
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=hparams.model_dir,
+        filename="my-bert-base-uncased-{epoch}",
+        save_top_k=2,
+        monitor="train_loss",
+        mode="min",
+        verbose=True,
+    )
+
     trainer = Trainer(
         max_epochs=hparams.num_epochs,
         max_steps=1000,
         accelerator="auto",
         devices="auto",
-        callbacks=[TQDMProgressBar(refresh_rate=20)],
+        callbacks=[
+            checkpoint_callback,
+            LearningRateMonitor(),
+            EarlyStopping(monitor="val_loss", mode="min", patience=5),
+            TQDMProgressBar(refresh_rate=20),
+        ],
     )
+
     trainer.fit(model, datamodule=cnn_dm)
