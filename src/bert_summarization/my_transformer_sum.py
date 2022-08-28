@@ -436,7 +436,8 @@ if __name__ == "__main__":
         model_dir="../data/cnn_daily/checkpoints/",
         model_file="../data/cnn_daily/checkpoints/my-bert-base-uncased.ckpt",
         load_from_checkpoint=False,
-        model_name="bert-base-uncased",
+        # model_name="bert-base-uncased",
+        model_name="prajjwal1/bert-small",
         learning_rate=1e-5,
         batch_size=32,
         num_epochs=100,
@@ -476,5 +477,5 @@ if __name__ == "__main__":
         ],
     )
 
-    # trainer.fit(model, datamodule=cnn_dm)
+    trainer.fit(model, datamodule=cnn_dm)
     trainer.test(model, datamodule=cnn_dm)
