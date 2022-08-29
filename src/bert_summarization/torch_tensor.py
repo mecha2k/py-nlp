@@ -92,6 +92,13 @@ if "source" and "target" in batch.keys():
     print("target", batch["target"])
 
 
+# pip3 install pyrouge
+# git clone https://github.com/andersjo/pyrouge.git
+# strawberry perl install (windows)
+# cd /Users/mecha2k/opt/anaconda3/envs/konlp/bin/ (mac)
+# cd /ProgramData/Anaconda3/envs/konlp/Scripts/ (windows)
+# python3 pyrouge_set_rouge_path /Users/mecha2k/Documents/Code/python/master/pyrouge-master/tools/ROUGE-1.5.5
+
 import pyrouge
 
 rouge = pyrouge.Rouge155()

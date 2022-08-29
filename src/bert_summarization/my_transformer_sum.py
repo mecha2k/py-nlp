@@ -365,57 +365,57 @@ class ExtractiveSummarization(LightningModule):
 
         test_rouge("../data/cnn_daily/save_pred.txt", "../data/cnn_daily/save_gold.txt")
 
-        rouge_scores_log = {}
-
-        if self.hparams.test_use_pyrouge:
-            test_rouge("tmp", "save_pred.txt", "save_gold.txt")
-        else:
-            aggregator = scoring.BootstrapAggregator()
-
-            # In `outputs` there is an entry for each batch that was passwed through the
-            # `test_step()` function. For each batch a list containing the rouge scores
-            # for each example exists under the key "rouge_scores" in `batch_list`. Thus,
-            # the below list comprehension loops through the list of outputs and grabs the
-            # items stored under the "rouge_scores" key. Then it flattens the list of lists
-            # to a list of rouge score objects that can be added to the `aggregator`.
-            rouge_scores_list = [
-                rouge_score_set
-                for batch_list in outputs
-                for rouge_score_set in batch_list["rouge_scores"]
-            ]
-            for score in rouge_scores_list:
-                aggregator.add_scores(score)
-            # The aggregator returns a dictionary with keys coresponding to the rouge metric
-            # and values that are `AggregateScore` objects. Each `AggregateScore` object is a
-            # named tuple with a low, mid, and high value. Each value is a `Score` object, which
-            # is also a named tuple, that contains the precision, recall, and fmeasure values.
-            # For more info see the source code: https://github.com/google-research/google-research/blob/master/rouge/scoring.py  # noqa: E501
-            rouge_result = aggregator.aggregate()
-
-            for metric, value in rouge_result.items():
-                rouge_scores_log[metric + "-precision"] = value.mid.precision
-                rouge_scores_log[metric + "-recall"] = value.mid.recall
-                rouge_scores_log[metric + "-fmeasure"] = value.mid.fmeasure
-
-        # Generate logs
-        loss_dict = {
-            "test_acc": avg_test_acc,
-            "test_f1": avg_test_f1,
-            "avg_test_acc_and_f1": avg_test_acc_and_f1,
-        }
-
-        for name, value in loss_dict.items():
-            self.log(name, value, prog_bar=True, sync_dist=True)
-        for name, value in rouge_scores_log.items():
-            self.log(name, value, prog_bar=False, sync_dist=True)
-
-        avg_loss = torch.stack([x["test_loss"] for x in outputs]).mean()
-        self.log("test_loss", avg_loss)
-        self.log("test_acc", torch.stack([x["test_acc"] for x in outputs]).mean())
-        self.log("test_f1", torch.stack([x["test_f1"] for x in outputs]).mean())
-        self.log("test_acc_and_f1", torch.stack([x["test_acc_and_f1"] for x in outputs]).mean())
-
-        return {"test_loss": avg_loss}
+        # rouge_scores_log = {}
+        #
+        # if self.hparams.test_use_pyrouge:
+        #     test_rouge("tmp", "save_pred.txt", "save_gold.txt")
+        # else:
+        #     aggregator = scoring.BootstrapAggregator()
+        #
+        #     # In `outputs` there is an entry for each batch that was passwed through the
+        #     # `test_step()` function. For each batch a list containing the rouge scores
+        #     # for each example exists under the key "rouge_scores" in `batch_list`. Thus,
+        #     # the below list comprehension loops through the list of outputs and grabs the
+        #     # items stored under the "rouge_scores" key. Then it flattens the list of lists
+        #     # to a list of rouge score objects that can be added to the `aggregator`.
+        #     rouge_scores_list = [
+        #         rouge_score_set
+        #         for batch_list in outputs
+        #         for rouge_score_set in batch_list["rouge_scores"]
+        #     ]
+        #     for score in rouge_scores_list:
+        #         aggregator.add_scores(score)
+        #     # The aggregator returns a dictionary with keys coresponding to the rouge metric
+        #     # and values that are `AggregateScore` objects. Each `AggregateScore` object is a
+        #     # named tuple with a low, mid, and high value. Each value is a `Score` object, which
+        #     # is also a named tuple, that contains the precision, recall, and fmeasure values.
+        #     # For more info see the source code: https://github.com/google-research/google-research/blob/master/rouge/scoring.py  # noqa: E501
+        #     rouge_result = aggregator.aggregate()
+        #
+        #     for metric, value in rouge_result.items():
+        #         rouge_scores_log[metric + "-precision"] = value.mid.precision
+        #         rouge_scores_log[metric + "-recall"] = value.mid.recall
+        #         rouge_scores_log[metric + "-fmeasure"] = value.mid.fmeasure
+        #
+        # # Generate logs
+        # loss_dict = {
+        #     "test_acc": avg_test_acc,
+        #     "test_f1": avg_test_f1,
+        #     "avg_test_acc_and_f1": avg_test_acc_and_f1,
+        # }
+        #
+        # for name, value in loss_dict.items():
+        #     self.log(name, value, prog_bar=True, sync_dist=True)
+        # for name, value in rouge_scores_log.items():
+        #     self.log(name, value, prog_bar=False, sync_dist=True)
+        #
+        # avg_loss = torch.stack([x["test_loss"] for x in outputs]).mean()
+        # self.log("test_loss", avg_loss)
+        # self.log("test_acc", torch.stack([x["test_acc"] for x in outputs]).mean())
+        # self.log("test_f1", torch.stack([x["test_f1"] for x in outputs]).mean())
+        # self.log("test_acc_and_f1", torch.stack([x["test_acc_and_f1"] for x in outputs]).mean())
+        #
+        # return {"test_loss": avg_loss}
 
     def configure_optimizers(self):
         no_decay = ["bias", "LayerNorm.weight"]
@@ -436,8 +436,7 @@ if __name__ == "__main__":
         model_dir="../data/cnn_daily/checkpoints/",
         model_file="../data/cnn_daily/checkpoints/my-bert-base-uncased.ckpt",
         load_from_checkpoint=False,
-        # model_name="bert-base-uncased",
-        model_name="prajjwal1/bert-small",
+        model_name="prajjwal1/bert-small",  # "bert-base-uncased"
         learning_rate=1e-5,
         batch_size=32,
         num_epochs=100,
