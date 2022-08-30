@@ -7,6 +7,14 @@ from datasets import load_metric
 from pprint import pprint
 from time import strftime, localtime
 
+# pip3 install pyrouge
+# git clone https://github.com/andersjo/pyrouge.git
+# strawberry perl install (windows)
+# cd /Users/mecha2k/opt/anaconda3/envs/konlp/bin/ (mac)
+# cd /ProgramData/Anaconda3/envs/konlp/Scripts/ (windows)
+# python3 pyrouge_set_rouge_path /Users/mecha2k/Documents/Code/python/master/pyrouge-master/tools/ROUGE-1.5.5
+# rouge = pyrouge.Rouge155()
+
 
 def rouge_score(candidates, references):
     rouge_dir = "../data/cnn_daily/rouge"

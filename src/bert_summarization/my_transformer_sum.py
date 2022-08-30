@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import transformers
-import pyrouge
 import warnings
 import logging
 import os
@@ -16,7 +15,7 @@ from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from rouge_score.rouge_scorer import RougeScorer
+from datasets import load_metric
 from collections import OrderedDict
 from argparse import Namespace
 from time import strftime, localtime
@@ -43,47 +42,6 @@ def block_trigrams(candidate: str, prediction: list) -> bool:
         if len(tri_c.intersection(tri_s)) > 0:
             return True
     return False
-
-
-def rouge_score(candidate_file, reference_file):
-    candidates = [line.strip() for line in open(candidate_file, encoding="utf-8")]
-    references = [line.strip() for line in open(reference_file, encoding="utf-8")]
-    assert len(candidates) == len(references)
-
-    rouge_dir = "../data/cnn_daily/rouge"
-    os.makedirs(rouge_dir, exist_ok=True)
-    current_time = strftime("%Y-%m-%d-%H-%M-%S", localtime())
-    rouge_dir = os.path.join(rouge_dir, f"rouge-{current_time}")
-    os.makedirs(rouge_dir, exist_ok=True)
-    os.makedirs(rouge_dir + "/candidate", exist_ok=True)
-    os.makedirs(rouge_dir + "/reference", exist_ok=True)
-
-    try:
-        for i in range(len(candidates)):
-            if len(references[i]) < 1:
-                continue
-            with open(
-                rouge_dir + f"/candidate/candidate.{i:03d}.txt", "w", encoding="utf-8"
-            ) as file:
-                file.write(candidates[i].replace("<q>", "\n"))
-            with open(
-                rouge_dir + f"/reference/reference.{i:03d}.txt", "w", encoding="utf-8"
-            ) as file:
-                file.write(references[i].replace("<q>", "\n"))
-
-        rouge = pyrouge.Rouge155()
-        rouge.model_dir = rouge_dir + "/reference/"
-        rouge.system_dir = rouge_dir + "/candidate/"
-        rouge.model_filename_pattern = "reference.#ID#.txt"
-        rouge.system_filename_pattern = r"candidate.(\d+).txt"
-        rouge_results = rouge.convert_and_evaluate()
-        print(rouge_results)
-        results = rouge.output_to_dict(rouge_results)
-    finally:
-        pass
-        if os.path.isdir(rouge_dir):
-            shutil.rmtree(rouge_dir)
-    return results
 
 
 class CnnDataModule(LightningDataModule):
@@ -363,13 +321,23 @@ class ExtractiveSummarization(LightningModule):
         )
 
     def test_epoch_end(self, outputs):
-        scores = rouge_score("../data/cnn_daily/save_pred.txt", "../data/cnn_daily/save_gold.txt")
+        predictions = [
+            line.strip() for line in open("../data/cnn_daily/save_pred.txt", encoding="utf-8")
+        ]
+        references = [
+            line.strip() for line in open("../data/cnn_daily/save_gold.txt", encoding="utf-8")
+        ]
+        assert len(candidates) == len(references)
+
+        rouge = load_metric("rouge")
+        metric = rouge.compute(predictions=predictions, references=references)
+        self.log("rouge1_f", metric["rouge1"].mid.fmeasure)
+        self.log("rouge2_f", metric["rouge2"].mid.fmeasure)
 
         return {
             "acc": torch.stack([x["acc"] for x in outputs]).mean(),
             "f1": torch.stack([x["f1"] for x in outputs]).mean(),
             "acc_and_f1": torch.stack([x["acc_and_f1"] for x in outputs]).mean(),
-            "rouge_scores": scores,
         }
 
     def configure_optimizers(self):
@@ -431,5 +399,5 @@ if __name__ == "__main__":
         ],
     )
 
-    # trainer.fit(model, datamodule=cnn_dm)
+    trainer.fit(model, datamodule=cnn_dm)
     trainer.test(model, datamodule=cnn_dm)

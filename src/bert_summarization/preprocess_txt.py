@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 data_dir = "../data/cnn_daily/cnn_dm/json.gz"
 data_types = ["val", "test", "train"]
+data_types = ["val"]
 
 # for data_type in data_types:
 #     inferred_type = "txt"
