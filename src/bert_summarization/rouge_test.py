@@ -1,3 +1,4 @@
+import numpy as np
 import pyrouge
 import shutil
 import os
@@ -48,10 +49,9 @@ candidates = [line.strip() for line in open("../data/cnn_daily/save_pred.txt", e
 references = [line.strip() for line in open("../data/cnn_daily/save_gold.txt", encoding="utf-8")]
 assert len(candidates) == len(references)
 
-candidates = candidates[:5]
-references = references[:5]
-print(candidates[0])
-print(references[0])
+idx = np.random.randint(0, len(candidates))
+print(candidates[idx])
+print(references[idx])
 
 results = rouge_score(candidates, references)
 print(results["rouge_1_f_score"])
