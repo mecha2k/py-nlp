@@ -2,14 +2,12 @@ import pyrouge
 import shutil
 import os
 
+from datasets import load_metric
+from pprint import pprint
 from time import strftime, localtime
 
 
-def rouge_score(candidate_file, reference_file):
-    candidates = [line.strip() for line in open(candidate_file, encoding="utf-8")]
-    references = [line.strip() for line in open(reference_file, encoding="utf-8")]
-    assert len(candidates) == len(references)
-
+def rouge_score(candidates, references):
     rouge_dir = "../data/cnn_daily/rouge"
     os.makedirs(rouge_dir, exist_ok=True)
     current_time = strftime("%Y-%m-%d-%H-%M-%S", localtime())
@@ -37,8 +35,8 @@ def rouge_score(candidate_file, reference_file):
         rouge.model_filename_pattern = "reference.#ID#.txt"
         rouge.system_filename_pattern = r"candidate.(\d+).txt"
         rouge_results = rouge.convert_and_evaluate()
-        print(rouge_results)
         results = rouge.output_to_dict(rouge_results)
+        print(rouge_results)
     finally:
         pass
         if os.path.isdir(rouge_dir):
@@ -46,5 +44,23 @@ def rouge_score(candidate_file, reference_file):
     return results
 
 
-results = rouge_score("../data/cnn_daily/save_pred.txt", "../data/cnn_daily/save_gold.txt")
-print(results)
+candidates = [line.strip() for line in open("../data/cnn_daily/save_pred.txt", encoding="utf-8")]
+references = [line.strip() for line in open("../data/cnn_daily/save_gold.txt", encoding="utf-8")]
+assert len(candidates) == len(references)
+
+candidates = candidates[:5]
+references = references[:5]
+print(candidates[0])
+print(references[0])
+
+results = rouge_score(candidates, references)
+print(results["rouge_1_f_score"])
+print(results["rouge_2_f_score"])
+print(results["rouge_l_f_score"])
+
+rouge = load_metric("rouge")
+metric = rouge.compute(predictions=candidates, references=references)
+print(metric.keys())
+print(metric["rouge1"].mid.fmeasure)
+print(metric["rouge2"].mid.fmeasure)
+print(metric["rougeL"].mid.fmeasure)
