@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import transformers
+import spacy
 import warnings
 import logging
 import os
@@ -144,9 +145,7 @@ class ExtractiveSummarization(LightningModule):
         self.model = AutoModel.from_pretrained(self.hparams.model_name)
         self.classifier = SimpleLinearClassifier(self.model.config.hidden_size)
         self.loss_fn = nn.BCEWithLogitsLoss(reduction="none")
-
-        self.rouge_metrics = ["rouge1", "rouge2", "rougeL", "rougeLsum"]
-        self.rouge_scorer = RougeScorer(self.rouge_metrics, use_stemmer=True)
+        self.nlp = spacy.load("en_core_web_sm")
 
     def forward(
         self, input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
@@ -327,7 +326,7 @@ class ExtractiveSummarization(LightningModule):
         references = [
             line.strip() for line in open("../data/cnn_daily/save_gold.txt", encoding="utf-8")
         ]
-        assert len(candidates) == len(references)
+        assert len(predictions) == len(references)
 
         rouge = load_metric("rouge")
         metric = rouge.compute(predictions=predictions, references=references)
@@ -351,6 +350,91 @@ class ExtractiveSummarization(LightningModule):
             {"params": params_no_decay, "weight_decay": 0.0},
         ]
         return torch.optim.AdamW(parameters, lr=self.hparams.learning_rate, eps=1e-8)
+
+    def predict_sentences(
+        self,
+        input_sentences,
+        raw_scores=False,
+        num_summary_sentences=3,
+    ):
+        source_txt = [
+            " ".join([token.text for token in self.nlp(sentence) if str(token) != "."]) + "."
+            for sentence in input_sentences
+        ]
+
+        input_ids = SentencesProcessor.get_input_ids(
+            self.tokenizer,
+            source_txt,
+            sep_token=self.tokenizer.sep_token,
+            cls_token=self.tokenizer.cls_token,
+            bert_compatible_cls=True,
+        )
+
+        input_ids = torch.tensor(input_ids)
+        attention_mask = torch.tensor([1] * len(input_ids))
+        sent_rep_token_ids = [
+            i for i, t in enumerate(input_ids) if t == self.tokenizer.cls_token_id
+        ]
+        sent_rep_mask = torch.tensor([1] * len(sent_rep_token_ids))
+
+        input_ids.unsqueeze_(0)
+        attention_mask.unsqueeze_(0)
+        sent_rep_mask.unsqueeze_(0)
+
+        self.eval()
+
+        with torch.no_grad():
+            outputs, _ = self.forward(
+                input_ids,
+                attention_mask,
+                sent_rep_mask=sent_rep_mask,
+                sent_rep_token_ids=sent_rep_token_ids,
+            )
+            outputs = torch.sigmoid(outputs)
+
+        if raw_scores:
+            # key=sentence
+            # value=score
+            sent_scores = list(zip(src_txt, outputs.tolist()[0]))
+            return sent_scores
+
+        sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
+        logger.debug("Sorted sentence ids: %s", sorted_ids)
+        selected_ids = sorted_ids[0, :num_summary_sentences]
+        logger.debug("Selected sentence ids: %s", selected_ids)
+
+        selected_sents = []
+        selected_ids.sort()
+        for i in selected_ids:
+            selected_sents.append(src_txt[i])
+
+        return " ".join(selected_sents).strip()
+
+    def predict(self, input_text: str, raw_scores=False, num_summary_sentences=3):
+        """Summarizes ``input_text`` using the model.
+
+        Args:
+            input_text (str): The text to be summarized.
+            raw_scores (bool, optional): Return a list containing each sentence
+                and its corespoding score instead of the summary. Defaults to False.
+            num_summary_sentences (int, optional): The number of sentences in the
+                output summary. This value specifies the number of top sentences to
+                select as the summary. Defaults to 3.
+
+        Returns:
+            str: The summary text. If ``raw_scores`` is set then returns a list
+            of input sentences and their corespoding scores.
+        """
+        nlp = English()
+        nlp.add_pipe("sentencizer")
+        doc = nlp(input_text)
+
+        return self.predict_sentences(
+            input_sentences=doc.sents,
+            raw_scores=raw_scores,
+            num_summary_sentences=num_summary_sentences,
+            tokenized=True,
+        )
 
 
 if __name__ == "__main__":
@@ -399,5 +483,5 @@ if __name__ == "__main__":
         ],
     )
 
-    trainer.fit(model, datamodule=cnn_dm)
+    # trainer.fit(model, datamodule=cnn_dm)
     trainer.test(model, datamodule=cnn_dm)
