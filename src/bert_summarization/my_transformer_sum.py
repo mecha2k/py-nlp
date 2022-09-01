@@ -36,13 +36,58 @@ def _get_ngrams(n_gram: int, text: list) -> set:
     return ngram_set
 
 
-def block_trigrams(candidate: str, prediction: list) -> bool:
+def _block_trigrams(candidate: str, prediction: list) -> bool:
     tri_c = _get_ngrams(3, candidate.split())
     for s in prediction:
         tri_s = _get_ngrams(3, s.split())
         if len(tri_c.intersection(tri_s)) > 0:
             return True
     return False
+
+
+def _get_input_ids(
+    tokenizer,
+    src_txt,
+    bert_compatible_cls=True,
+    sep_token=None,
+    cls_token=None,
+    max_length=None,
+):
+    sep_token = str(sep_token)
+    cls_token = str(cls_token)
+    if max_length is None:
+        max_length = list(tokenizer.max_model_input_sizes.values())[0]
+        if max_length > tokenizer.model_max_length:
+            max_length = tokenizer.model_max_length
+
+    if bert_compatible_cls:
+        unk_token = str(tokenizer.unk_token)
+        src_txt = [
+            sent.replace(sep_token, unk_token).replace(cls_token, unk_token) for sent in src_txt
+        ]
+
+        if not len(src_txt) < 2:
+            separation_string = " " + sep_token + " " + cls_token + " "
+            text = separation_string.join(src_txt)
+        else:
+            try:
+                text = src_txt[0]
+            except IndexError:
+                text = src_txt
+
+        src_subtokens = tokenizer.tokenize(text)
+        src_subtokens = src_subtokens[: (max_length - 2)]
+        src_subtokens.insert(0, cls_token)
+        src_subtokens.append(sep_token)
+        input_ids = tokenizer.convert_tokens_to_ids(src_subtokens)
+    else:
+        input_ids = tokenizer.encode(
+            src_txt,
+            add_special_tokens=True,
+            max_length=min(max_length, tokenizer.model_max_length),
+        )
+
+    return input_ids
 
 
 class CnnDataModule(LightningDataModule):
@@ -294,7 +339,7 @@ class ExtractiveSummarization(LightningModule):
                     continue
 
                 candidate = source[i].strip()
-                if not block_trigrams(candidate, current_prediction):
+                if not _block_trigrams(candidate, current_prediction):
                     current_prediction.append(candidate)
 
                 if len(current_prediction) >= self.hparams.top_k_sentences:
@@ -362,7 +407,7 @@ class ExtractiveSummarization(LightningModule):
             for sentence in input_sentences
         ]
 
-        input_ids = SentencesProcessor.get_input_ids(
+        input_ids = _get_input_ids(
             self.tokenizer,
             source_txt,
             sep_token=self.tokenizer.sep_token,
@@ -409,32 +454,6 @@ class ExtractiveSummarization(LightningModule):
             selected_sents.append(src_txt[i])
 
         return " ".join(selected_sents).strip()
-
-    def predict(self, input_text: str, raw_scores=False, num_summary_sentences=3):
-        """Summarizes ``input_text`` using the model.
-
-        Args:
-            input_text (str): The text to be summarized.
-            raw_scores (bool, optional): Return a list containing each sentence
-                and its corespoding score instead of the summary. Defaults to False.
-            num_summary_sentences (int, optional): The number of sentences in the
-                output summary. This value specifies the number of top sentences to
-                select as the summary. Defaults to 3.
-
-        Returns:
-            str: The summary text. If ``raw_scores`` is set then returns a list
-            of input sentences and their corespoding scores.
-        """
-        nlp = English()
-        nlp.add_pipe("sentencizer")
-        doc = nlp(input_text)
-
-        return self.predict_sentences(
-            input_sentences=doc.sents,
-            raw_scores=raw_scores,
-            num_summary_sentences=num_summary_sentences,
-            tokenized=True,
-        )
 
 
 if __name__ == "__main__":
@@ -484,4 +503,11 @@ if __name__ == "__main__":
     )
 
     # trainer.fit(model, datamodule=cnn_dm)
-    trainer.test(model, datamodule=cnn_dm)
+    # trainer.test(model, datamodule=cnn_dm)
+
+    cnn_dm.prepare_data()
+    cnn_dm.setup(stage="test")
+
+    input_sentences = cnn_dm.datasets["test"][0]["source"]
+    predictions = model.predict_sentences(input_sentences)
+    print(predictions)
