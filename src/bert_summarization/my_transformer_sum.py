@@ -400,7 +400,7 @@ class ExtractiveSummarization(LightningModule):
         self,
         input_sentences,
         raw_scores=False,
-        num_summary_sentences=3,
+        num_sentences=3,
     ):
         source_txt = [
             " ".join([token.text for token in self.nlp(sentence) if str(token) != "."]) + "."
@@ -415,31 +415,38 @@ class ExtractiveSummarization(LightningModule):
             bert_compatible_cls=True,
         )
 
-        input_ids = torch.tensor(input_ids)
-        attention_mask = torch.tensor([1] * len(input_ids))
-        sent_rep_token_ids = [
-            i for i, t in enumerate(input_ids) if t == self.tokenizer.cls_token_id
-        ]
-        sent_rep_mask = torch.tensor([1] * len(sent_rep_token_ids))
+        cls_token_id = self.tokenizer.cls_token_id
+        attention_mask = [1] * len(input_ids)
+        sent_rep_token_ids = [i for i, t in enumerate(input_ids) if t == cls_token_id]
+        sent_rep_masks = [1] * len(sent_rep_token_ids)
 
-        input_ids.unsqueeze_(0)
-        attention_mask.unsqueeze_(0)
-        sent_rep_mask.unsqueeze_(0)
+        segment_flag = True
+        segment_ids = list()
+        segment_token_id = self.tokenizer.sep_token
+        for ids in input_ids:
+            segment_ids += [0 if segment_flag else 1]
+            if ids == segment_token_id:
+                segment_flag = not segment_flag
+
+        input_ids = pad_sequences(input_ids, maxlen=self.max_seq_len, padding="post")
+        attention_mask = pad_sequences(attention_mask, maxlen=self.max_seq_len, padding="post")
+        token_type_ids = pad_sequences(segment_ids, maxlen=self.max_seq_len, padding="post")
+        sent_rep_token_ids = pad_sequences(sent_rep_token_ids, padding="post", value=-1)
+
+        input_ids = torch.tensor(input_ids).unsqueeze(0)
+        attention_mask = torch.tensor(attention_mask).unsqueeze(0)
+        token_type_ids = torch.tensor(token_type_ids).unsqueeze(0)
+        sent_rep_token_ids = torch.tensor(sent_rep_token_ids).unsqueeze(0)
+        sent_rep_masks = torch.tensor(sent_rep_masks).unsqueeze(0)
 
         self.eval()
-
         with torch.no_grad():
-            outputs, _ = self.forward(
-                input_ids,
-                attention_mask,
-                sent_rep_mask=sent_rep_mask,
-                sent_rep_token_ids=sent_rep_token_ids,
+            outputs = self(
+                input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
             )
             outputs = torch.sigmoid(outputs)
 
         if raw_scores:
-            # key=sentence
-            # value=score
             sent_scores = list(zip(src_txt, outputs.tolist()[0]))
             return sent_scores
 
