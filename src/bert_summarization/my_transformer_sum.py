@@ -6,20 +6,23 @@ import transformers
 import spacy
 import warnings
 import logging
+import json
+import gzip
 import os
 
 from torch.optim import AdamW
-from torch.utils.data import Dataset, DataLoader, TensorDataset
+from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, AutoModel, AutoConfig
 from transformers.data.metrics import acc_and_f1
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
-from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.utils import pad_sequences
 from datasets import load_metric
 from collections import OrderedDict
 from argparse import Namespace
 from time import strftime, localtime
+from glob import glob
 
 
 logger = logging.getLogger(__name__)
@@ -49,12 +52,10 @@ def _get_input_ids(
     tokenizer,
     src_txt,
     bert_compatible_cls=True,
-    sep_token=None,
-    cls_token=None,
     max_length=None,
 ):
-    sep_token = str(sep_token)
-    cls_token = str(cls_token)
+    sep_token = tokenizer.sep_token
+    cls_token = tokenizer.cls_token
     if max_length is None:
         max_length = list(tokenizer.max_model_input_sizes.values())[0]
         if max_length > tokenizer.model_max_length:
@@ -400,7 +401,6 @@ class ExtractiveSummarization(LightningModule):
         self,
         input_sentences,
         raw_scores=False,
-        num_sentences=3,
     ):
         source_txt = [
             " ".join([token.text for token in self.nlp(sentence) if str(token) != "."]) + "."
@@ -428,9 +428,11 @@ class ExtractiveSummarization(LightningModule):
             if ids == segment_token_id:
                 segment_flag = not segment_flag
 
-        input_ids = pad_sequences(input_ids, maxlen=self.max_seq_len, padding="post")
-        attention_mask = pad_sequences(attention_mask, maxlen=self.max_seq_len, padding="post")
-        token_type_ids = pad_sequences(segment_ids, maxlen=self.max_seq_len, padding="post")
+        input_ids = pad_sequences(input_ids, maxlen=self.hparams.max_seq_len, padding="post")
+        attention_mask = pad_sequences(
+            attention_mask, maxlen=self.hparams.max_seq_len, padding="post"
+        )
+        token_type_ids = pad_sequences(segment_ids, maxlen=self.hparams.max_seq_len, padding="post")
         sent_rep_token_ids = pad_sequences(sent_rep_token_ids, padding="post", value=-1)
 
         input_ids = torch.tensor(input_ids).unsqueeze(0)
@@ -463,13 +465,94 @@ class ExtractiveSummarization(LightningModule):
         return " ".join(selected_sents).strip()
 
 
+def load_json(json_file):
+    documents = None
+    file_path, file_extension = os.path.splitext(json_file)
+    if file_extension == ".json":
+        with open(json_file, "r") as json_file_object:
+            documents = json.load(json_file_object)
+    elif file_extension == ".gz":
+        file_path = os.path.splitext(file_path)[0]
+        with gzip.open(json_file, "r") as json_gzip:
+            json_bytes = json_gzip.read()
+        json_str = json_bytes.decode("utf-8")
+        documents = json.loads(json_str)
+    else:
+        logger.error("File extension %s is not recognized. ('.json' or '.gz')", file_extension)
+    return documents, file_path
+
+
+def json_to_dataset(tokenizer, inputs=None, num_files=0):
+    idx, json_file = inputs
+    logger.info("Processing %s (%i/%i)", json_file, idx + 1, num_files)
+
+    datasets = list()
+    documents, file_path = load_json(json_file)
+    for idx, document in enumerate(documents):
+        if idx % 1000 == 0:
+            logger.info("Generating features for example %s/%s", idx, len(documents))
+        sources = [" ".join(sent) for sent in document["src"]]
+
+        input_ids = _get_input_ids(tokenizer, sources, bert_compatible_cls=True)
+        attention_mask = [1] * len(input_ids)
+
+        token_type_ids = []
+        segment_flag = True
+        for ids in input_ids:
+            token_type_ids += [0 if segment_flag else 1]
+            if ids == tokenizer.sep_token_id:
+                segment_flag = not segment_flag
+
+        sent_rep_id = tokenizer.sep_token_id
+        sent_rep_token_ids = [i for i, t in enumerate(input_ids) if t == sent_rep_id]
+        labels = document["labels"][: len(sent_rep_token_ids)]
+
+        datasets.append(
+            {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "token_type_ids": token_type_ids,
+                "sent_rep_token_ids": sent_rep_token_ids,
+                "labels": labels,
+                "sources": sources,
+                "targets": document["tgt"] if "tgt" in document else None,
+            }
+        )
+
+    return datasets
+
+
+def preprocess_datasets(hparams):
+    tokenizer = AutoTokenizer.from_pretrained(hparams.model_name, use_fast=True)
+    print(tokenizer.model_max_length)
+
+    datasets = dict()
+    data_types = ["train", "val", "test"]
+    for data_type in data_types:
+        json_files = glob(os.path.join(hparams.src_data_path, "*" + data_type + ".*.json*"))
+        json_files = sorted(json_files)[:1]
+
+        data = list()
+        for inputs in enumerate(json_files):
+            data.append(json_to_dataset(tokenizer, inputs, num_files=len(json_files)))
+        datasets[data_type] = np.concatenate(data, axis=0)
+        np.save(
+            os.path.join(hparams.data_dir, "dataset_" + data_type + "_small.npy"),
+            datasets[data_type],
+        )
+
+    return datasets
+
+
 if __name__ == "__main__":
     hparams = Namespace(
         data_dir="../data/cnn_daily/cnn_dm/",
         model_dir="../data/cnn_daily/checkpoints/",
         model_file="../data/cnn_daily/checkpoints/my-bert-base-uncased.ckpt",
+        src_data_path="../data/cnn_daily/cnn_dm/json.gz",
         load_from_checkpoint=False,
-        model_name="prajjwal1/bert-small",  # "bert-base-uncased"
+        # model_name="prajjwal1/bert-small",
+        model_name="bert-base-uncased",
         learning_rate=1e-5,
         batch_size=32,
         num_epochs=100,
@@ -478,43 +561,45 @@ if __name__ == "__main__":
         top_k_sentences=3,
     )
 
-    cnn_dm = CnnDataModule(
-        data_dir=hparams.data_dir, batch_size=hparams.batch_size, max_seq_len=hparams.max_seq_len
-    )
+    preprocess_datasets(hparams=hparams)
 
-    if hparams.load_from_checkpoint:
-        model = ExtractiveSummarization.load_from_checkpoint(hparams.model_file)
-    else:
-        model = ExtractiveSummarization(hparams=hparams)
-
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=hparams.model_dir,
-        filename="my-bert-base-uncased-{epoch}",
-        save_top_k=2,
-        monitor="train_loss",
-        mode="min",
-        verbose=True,
-    )
-
-    trainer = Trainer(
-        max_epochs=hparams.num_epochs,
-        max_steps=1000,
-        accelerator="auto",
-        devices="auto",
-        callbacks=[
-            checkpoint_callback,
-            LearningRateMonitor(),
-            EarlyStopping(monitor="val_loss", mode="min", patience=5),
-            TQDMProgressBar(refresh_rate=20),
-        ],
-    )
+    # cnn_dm = CnnDataModule(
+    #     data_dir=hparams.data_dir, batch_size=hparams.batch_size, max_seq_len=hparams.max_seq_len
+    # )
+    #
+    # if hparams.load_from_checkpoint:
+    #     model = ExtractiveSummarization.load_from_checkpoint(hparams.model_file)
+    # else:
+    #     model = ExtractiveSummarization(hparams=hparams)
+    #
+    # checkpoint_callback = ModelCheckpoint(
+    #     dirpath=hparams.model_dir,
+    #     filename="my-bert-base-uncased-{epoch}",
+    #     save_top_k=2,
+    #     monitor="train_loss",
+    #     mode="min",
+    #     verbose=True,
+    # )
+    #
+    # trainer = Trainer(
+    #     max_epochs=hparams.num_epochs,
+    #     max_steps=1000,
+    #     accelerator="auto",
+    #     devices="auto",
+    #     callbacks=[
+    #         checkpoint_callback,
+    #         LearningRateMonitor(),
+    #         EarlyStopping(monitor="val_loss", mode="min", patience=5),
+    #         TQDMProgressBar(refresh_rate=20),
+    #     ],
+    # )
 
     # trainer.fit(model, datamodule=cnn_dm)
     # trainer.test(model, datamodule=cnn_dm)
 
-    cnn_dm.prepare_data()
-    cnn_dm.setup(stage="test")
-
-    input_sentences = cnn_dm.datasets["test"][0]["source"]
-    predictions = model.predict_sentences(input_sentences)
-    print(predictions)
+    # cnn_dm.prepare_data()
+    # cnn_dm.setup(stage="test")
+    #
+    # input_sentences = cnn_dm.datasets["test"][0]["source"]
+    # predictions = model.predict_sentences(input_sentences)
+    # print(predictions)
