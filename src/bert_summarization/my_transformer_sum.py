@@ -91,6 +91,85 @@ def _get_input_ids(
     return input_ids
 
 
+def load_json(json_file):
+    documents = None
+    file_path, file_extension = os.path.splitext(json_file)
+    if file_extension == ".json":
+        with open(json_file, "r") as json_file_object:
+            documents = json.load(json_file_object)
+    elif file_extension == ".gz":
+        file_path = os.path.splitext(file_path)[0]
+        with gzip.open(json_file, "r") as json_gzip:
+            json_bytes = json_gzip.read()
+        json_str = json_bytes.decode("utf-8")
+        documents = json.loads(json_str)
+    else:
+        logger.error("File extension %s is not recognized. ('.json' or '.gz')", file_extension)
+    return documents, file_path
+
+
+def json_to_dataset(tokenizer, inputs=None, num_files=0):
+    idx, json_file = inputs
+    logger.info("Processing %s (%i/%i)", json_file, idx + 1, num_files)
+
+    datasets = list()
+    documents, file_path = load_json(json_file)
+    for idx, document in enumerate(documents):
+        if idx % 1000 == 0:
+            logger.info("Generating features for example %s/%s", idx, len(documents))
+        sources = [" ".join(sent) for sent in document["src"]]
+
+        input_ids = _get_input_ids(tokenizer, sources, bert_compatible_cls=True)
+        attention_mask = [1] * len(input_ids)
+
+        token_type_ids = []
+        segment_flag = True
+        for ids in input_ids:
+            token_type_ids += [0 if segment_flag else 1]
+            if ids == tokenizer.sep_token_id:
+                segment_flag = not segment_flag
+
+        sent_rep_id = tokenizer.sep_token_id
+        sent_rep_token_ids = [i for i, t in enumerate(input_ids) if t == sent_rep_id]
+        labels = document["labels"][: len(sent_rep_token_ids)]
+
+        datasets.append(
+            {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "token_type_ids": token_type_ids,
+                "sent_rep_token_ids": sent_rep_token_ids,
+                "labels": labels,
+                "sources": sources,
+                "targets": document["tgt"] if "tgt" in document else None,
+            }
+        )
+
+    return datasets
+
+
+def preprocess_datasets(hparams):
+    tokenizer = AutoTokenizer.from_pretrained(hparams.model_name, use_fast=True)
+    print(tokenizer.model_max_length)
+
+    datasets = dict()
+    data_types = ["train", "val", "test"]
+    for data_type in data_types:
+        json_files = glob(os.path.join(hparams.src_data_path, "*" + data_type + ".*.json*"))
+        json_files = sorted(json_files)[:1]
+
+        data = list()
+        for inputs in enumerate(json_files):
+            data.append(json_to_dataset(tokenizer, inputs, num_files=len(json_files)))
+        datasets[data_type] = np.concatenate(data, axis=0)
+        np.save(
+            os.path.join(hparams.data_dir, "dataset_" + data_type + "_small.npy"),
+            datasets[data_type],
+        )
+
+    return datasets
+
+
 class CnnDataModule(LightningDataModule):
     def __init__(self, data_dir: str, batch_size: int, max_seq_len: int) -> None:
         super().__init__()
@@ -104,7 +183,7 @@ class CnnDataModule(LightningDataModule):
         data_types = ["train", "val", "test"]
         for data_type in data_types:
             datasets[data_type] = np.load(
-                os.path.join(self.data_dir, f"datasets_{data_type}_small.npy"), allow_pickle=True
+                os.path.join(self.data_dir, f"dataset_{data_type}_small.npy"), allow_pickle=True
             )
         self.datasets = datasets
 
@@ -186,9 +265,12 @@ class SimpleLinearClassifier(nn.Module):
 class ExtractiveSummarization(LightningModule):
     def __init__(self, hparams: Namespace) -> None:
         super().__init__()
+        if type(hparams) is dict:
+            hparams = Namespace(**hparams)
         self.save_hyperparameters(hparams)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.hparams.model_name, use_fast=True)
-        self.model = AutoModel.from_pretrained(self.hparams.model_name)
+        model_name = getattr(hparams, "model_name", hparams.model_name_or_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+        self.model = AutoModel.from_pretrained(model_name)
         self.classifier = SimpleLinearClassifier(self.model.config.hidden_size)
         self.loss_fn = nn.BCEWithLogitsLoss(reduction="none")
         self.nlp = spacy.load("en_core_web_sm")
@@ -397,49 +479,39 @@ class ExtractiveSummarization(LightningModule):
         ]
         return torch.optim.AdamW(parameters, lr=self.hparams.learning_rate, eps=1e-8)
 
-    def predict_sentences(
-        self,
-        input_sentences,
-        raw_scores=False,
-    ):
+    def predict_sentences(self, input_sentences, top_k, raw_scores=False):
         source_txt = [
             " ".join([token.text for token in self.nlp(sentence) if str(token) != "."]) + "."
             for sentence in input_sentences
         ]
 
-        input_ids = _get_input_ids(
-            self.tokenizer,
-            source_txt,
-            sep_token=self.tokenizer.sep_token,
-            cls_token=self.tokenizer.cls_token,
-            bert_compatible_cls=True,
-        )
-
-        cls_token_id = self.tokenizer.cls_token_id
+        input_ids = _get_input_ids(self.tokenizer, source_txt, bert_compatible_cls=True)
         attention_mask = [1] * len(input_ids)
-        sent_rep_token_ids = [i for i, t in enumerate(input_ids) if t == cls_token_id]
-        sent_rep_masks = [1] * len(sent_rep_token_ids)
 
+        maxlen = getattr(self.hparams, "max_seq_len", self.tokenizer.model_max_length)
+        sep_token_id = self.tokenizer.sep_token_id
+
+        token_type_ids = []
         segment_flag = True
-        segment_ids = list()
-        segment_token_id = self.tokenizer.sep_token
         for ids in input_ids:
-            segment_ids += [0 if segment_flag else 1]
-            if ids == segment_token_id:
+            token_type_ids += [0 if segment_flag else 1]
+            if ids == sep_token_id:
                 segment_flag = not segment_flag
 
-        input_ids = pad_sequences(input_ids, maxlen=self.hparams.max_seq_len, padding="post")
-        attention_mask = pad_sequences(
-            attention_mask, maxlen=self.hparams.max_seq_len, padding="post"
-        )
-        token_type_ids = pad_sequences(segment_ids, maxlen=self.hparams.max_seq_len, padding="post")
-        sent_rep_token_ids = pad_sequences(sent_rep_token_ids, padding="post", value=-1)
+        sent_rep_token_ids = [i for i, t in enumerate(input_ids) if t == sep_token_id]
+        sent_rep_masks = [1] * len(sent_rep_token_ids)
 
-        input_ids = torch.tensor(input_ids).unsqueeze(0)
-        attention_mask = torch.tensor(attention_mask).unsqueeze(0)
-        token_type_ids = torch.tensor(token_type_ids).unsqueeze(0)
-        sent_rep_token_ids = torch.tensor(sent_rep_token_ids).unsqueeze(0)
-        sent_rep_masks = torch.tensor(sent_rep_masks).unsqueeze(0)
+        input_ids = pad_sequences([input_ids], maxlen=maxlen, padding="post")
+        attention_mask = pad_sequences([attention_mask], maxlen=maxlen, padding="post")
+        token_type_ids = pad_sequences([token_type_ids], maxlen=maxlen, padding="post")
+        sent_rep_token_ids = pad_sequences([sent_rep_token_ids], padding="post", value=-1)
+        sent_rep_masks = pad_sequences([sent_rep_masks], padding="post", value=-1)
+
+        input_ids = torch.tensor(input_ids, dtype=torch.long)
+        attention_mask = torch.tensor(attention_mask, dtype=torch.long)
+        token_type_ids = torch.tensor(token_type_ids, dtype=torch.long)
+        sent_rep_token_ids = torch.tensor(sent_rep_token_ids, dtype=torch.long)
+        sent_rep_masks = torch.tensor(sent_rep_masks, dtype=torch.long)
 
         self.eval()
         with torch.no_grad():
@@ -449,157 +521,79 @@ class ExtractiveSummarization(LightningModule):
             outputs = torch.sigmoid(outputs)
 
         if raw_scores:
-            sent_scores = list(zip(src_txt, outputs.tolist()[0]))
+            sent_scores = list(zip(source_txt, outputs.tolist()[0]))
             return sent_scores
 
         sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
         logger.debug("Sorted sentence ids: %s", sorted_ids)
-        selected_ids = sorted_ids[0, :num_summary_sentences]
+        selected_ids = sorted_ids[0, :top_k]
         logger.debug("Selected sentence ids: %s", selected_ids)
 
         selected_sents = []
         selected_ids.sort()
         for i in selected_ids:
-            selected_sents.append(src_txt[i])
+            selected_sents.append(source_txt[i])
 
         return " ".join(selected_sents).strip()
-
-
-def load_json(json_file):
-    documents = None
-    file_path, file_extension = os.path.splitext(json_file)
-    if file_extension == ".json":
-        with open(json_file, "r") as json_file_object:
-            documents = json.load(json_file_object)
-    elif file_extension == ".gz":
-        file_path = os.path.splitext(file_path)[0]
-        with gzip.open(json_file, "r") as json_gzip:
-            json_bytes = json_gzip.read()
-        json_str = json_bytes.decode("utf-8")
-        documents = json.loads(json_str)
-    else:
-        logger.error("File extension %s is not recognized. ('.json' or '.gz')", file_extension)
-    return documents, file_path
-
-
-def json_to_dataset(tokenizer, inputs=None, num_files=0):
-    idx, json_file = inputs
-    logger.info("Processing %s (%i/%i)", json_file, idx + 1, num_files)
-
-    datasets = list()
-    documents, file_path = load_json(json_file)
-    for idx, document in enumerate(documents):
-        if idx % 1000 == 0:
-            logger.info("Generating features for example %s/%s", idx, len(documents))
-        sources = [" ".join(sent) for sent in document["src"]]
-
-        input_ids = _get_input_ids(tokenizer, sources, bert_compatible_cls=True)
-        attention_mask = [1] * len(input_ids)
-
-        token_type_ids = []
-        segment_flag = True
-        for ids in input_ids:
-            token_type_ids += [0 if segment_flag else 1]
-            if ids == tokenizer.sep_token_id:
-                segment_flag = not segment_flag
-
-        sent_rep_id = tokenizer.sep_token_id
-        sent_rep_token_ids = [i for i, t in enumerate(input_ids) if t == sent_rep_id]
-        labels = document["labels"][: len(sent_rep_token_ids)]
-
-        datasets.append(
-            {
-                "input_ids": input_ids,
-                "attention_mask": attention_mask,
-                "token_type_ids": token_type_ids,
-                "sent_rep_token_ids": sent_rep_token_ids,
-                "labels": labels,
-                "sources": sources,
-                "targets": document["tgt"] if "tgt" in document else None,
-            }
-        )
-
-    return datasets
-
-
-def preprocess_datasets(hparams):
-    tokenizer = AutoTokenizer.from_pretrained(hparams.model_name, use_fast=True)
-    print(tokenizer.model_max_length)
-
-    datasets = dict()
-    data_types = ["train", "val", "test"]
-    for data_type in data_types:
-        json_files = glob(os.path.join(hparams.src_data_path, "*" + data_type + ".*.json*"))
-        json_files = sorted(json_files)[:1]
-
-        data = list()
-        for inputs in enumerate(json_files):
-            data.append(json_to_dataset(tokenizer, inputs, num_files=len(json_files)))
-        datasets[data_type] = np.concatenate(data, axis=0)
-        np.save(
-            os.path.join(hparams.data_dir, "dataset_" + data_type + "_small.npy"),
-            datasets[data_type],
-        )
-
-    return datasets
 
 
 if __name__ == "__main__":
     hparams = Namespace(
         data_dir="../data/cnn_daily/cnn_dm/",
         model_dir="../data/cnn_daily/checkpoints/",
-        model_file="../data/cnn_daily/checkpoints/my-bert-base-uncased.ckpt",
+        model_file="../data/cnn_daily/checkpoints/bert-base-uncased-ext-sum.ckpt",
         src_data_path="../data/cnn_daily/cnn_dm/json.gz",
-        load_from_checkpoint=False,
-        # model_name="prajjwal1/bert-small",
-        model_name="bert-base-uncased",
+        load_from_checkpoint=True,
+        model_name="bert-base-uncased",  # "prajjwal1/bert-small", "bert-base-uncased",
         learning_rate=1e-5,
         batch_size=32,
         num_epochs=100,
         max_seq_len=512,
         weight_decay=0.01,
-        top_k_sentences=3,
+        top_k_sentences=2,
     )
 
-    preprocess_datasets(hparams=hparams)
+    # preprocess_datasets(hparams=hparams)
 
-    # cnn_dm = CnnDataModule(
-    #     data_dir=hparams.data_dir, batch_size=hparams.batch_size, max_seq_len=hparams.max_seq_len
-    # )
-    #
-    # if hparams.load_from_checkpoint:
-    #     model = ExtractiveSummarization.load_from_checkpoint(hparams.model_file)
-    # else:
-    #     model = ExtractiveSummarization(hparams=hparams)
-    #
-    # checkpoint_callback = ModelCheckpoint(
-    #     dirpath=hparams.model_dir,
-    #     filename="my-bert-base-uncased-{epoch}",
-    #     save_top_k=2,
-    #     monitor="train_loss",
-    #     mode="min",
-    #     verbose=True,
-    # )
-    #
-    # trainer = Trainer(
-    #     max_epochs=hparams.num_epochs,
-    #     max_steps=1000,
-    #     accelerator="auto",
-    #     devices="auto",
-    #     callbacks=[
-    #         checkpoint_callback,
-    #         LearningRateMonitor(),
-    #         EarlyStopping(monitor="val_loss", mode="min", patience=5),
-    #         TQDMProgressBar(refresh_rate=20),
-    #     ],
-    # )
+    cnn_dm = CnnDataModule(
+        data_dir=hparams.data_dir, batch_size=hparams.batch_size, max_seq_len=hparams.max_seq_len
+    )
+
+    if hparams.load_from_checkpoint:
+        model = ExtractiveSummarization.load_from_checkpoint(hparams.model_file, strict=False)
+    else:
+        model = ExtractiveSummarization(hparams=hparams)
+
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=hparams.model_dir,
+        filename="my-bert-base-uncased-{epoch}",
+        save_top_k=2,
+        monitor="train_loss",
+        mode="min",
+        verbose=True,
+    )
+
+    trainer = Trainer(
+        max_epochs=hparams.num_epochs,
+        max_steps=1000,
+        accelerator="auto",
+        devices="auto",
+        callbacks=[
+            checkpoint_callback,
+            LearningRateMonitor(),
+            EarlyStopping(monitor="val_loss", mode="min", patience=5),
+            TQDMProgressBar(refresh_rate=20),
+        ],
+    )
 
     # trainer.fit(model, datamodule=cnn_dm)
     # trainer.test(model, datamodule=cnn_dm)
 
-    # cnn_dm.prepare_data()
-    # cnn_dm.setup(stage="test")
-    #
-    # input_sentences = cnn_dm.datasets["test"][0]["source"]
-    # predictions = model.predict_sentences(input_sentences)
-    # print(predictions)
+    cnn_dm.prepare_data()
+    cnn_dm.setup(stage="test")
+
+    idx = np.random.randint(0, 1000)
+    input_sentences = cnn_dm.datasets["test"][idx]["sources"]
+    predictions = model.predict_sentences(input_sentences, top_k=hparams.top_k_sentences)
+    print(predictions)
+    print(cnn_dm.datasets["test"][idx]["targets"])
