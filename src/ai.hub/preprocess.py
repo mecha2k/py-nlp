@@ -56,9 +56,6 @@ def make_pkl_data(section):
     print(df.category.value_counts())
     print(df.media_name.value_counts())
 
-    df = df[:1000]
-    df.to_pickle(f"../data/ai.hub/train_df.pickle")
-
     samples = df.sample(n=1)
     print("article : ", samples["article"].values[0])
     print("extractive : ", samples["abstractive"].values[0])
@@ -66,6 +63,14 @@ def make_pkl_data(section):
 
 
 if __name__ == "__main__":
-    for section in ["news", "columns"]:
-        preprocess_data(section)
-        make_pkl_data(section)
+    # for section in ["news", "columns"]:
+    #     preprocess_data(section)
+    #     make_pkl_data(section)
+
+    # df = pd.read_pickle("../data/ai.hub/train_news_df.pkl")
+    # df = df[:2000]
+    # df.to_pickle("../data/ai.hub/train_news_small_df.pkl")
+
+    df = pd.read_pickle("../data/ai.hub/train_news_small_df.pkl")
+    print(df.info())
+    print(df.text[0])
