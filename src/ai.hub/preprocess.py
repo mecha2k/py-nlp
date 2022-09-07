@@ -37,8 +37,11 @@ def preprocess_data(section):
     df.to_pickle(f"../data/ai.hub/train_{section}_df.pkl")
 
 
-def make_pkl_data(section):
-    df = pd.read_pickle(f"../data/ai.hub/train_{section}_df.pkl")
+if __name__ == "__main__":
+    # for section in ["news", "columns"]:
+    #     preprocess_data(section)
+
+    df = pd.read_pickle(f"../data/ai.hub/train_news_small_df.pkl")
 
     def extract_sentence(row):
         extractive_sentences = ""
@@ -60,17 +63,3 @@ def make_pkl_data(section):
     print("article : ", samples["article"].values[0])
     print("extractive : ", samples["abstractive"].values[0])
     print("abstractive : ", samples["extractive_sentence"].values[0])
-
-
-if __name__ == "__main__":
-    # for section in ["news", "columns"]:
-    #     preprocess_data(section)
-    #     make_pkl_data(section)
-
-    # df = pd.read_pickle("../data/ai.hub/train_news_df.pkl")
-    # df = df[:2000]
-    # df.to_pickle("../data/ai.hub/train_news_small_df.pkl")
-
-    df = pd.read_pickle("../data/ai.hub/train_news_small_df.pkl")
-    print(df.info())
-    print(df.text[0])
