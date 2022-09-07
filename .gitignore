@@ -18,6 +18,7 @@ src/data
 
 
 master/kobertsum/ext
+datasets
 
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
