@@ -96,14 +96,24 @@ class KobertSummarization(LightningModule):
         self.loss_fn = nn.CrossEntropyLoss()
         self.metric = load_metric("squad")
 
-    def forward(self, input_ids, attention_mask, start_positions, end_positions):
-        outputs = self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            start_positions=start_positions,
-            end_positions=end_positions,
-        )
-        return outputs
+    def forward(
+        self, input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
+    ) -> torch.Tensor:
+        inputs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids,
+        }
+
+        outputs = self.model(**inputs)
+        hidden_states = outputs[0]
+        sentence_vectors = hidden_states[
+            torch.arange(hidden_states.size(0)).unsqueeze(dim=1), sent_rep_token_ids
+        ]
+        sentence_vectors = sentence_vectors * sent_rep_masks[:, :, None].float()
+        sentence_scores = self.classifier(sentence_vectors, sent_rep_masks)
+
+        return sentence_scores
 
     def training_step(self, batch, batch_idx):
         outputs = self(
