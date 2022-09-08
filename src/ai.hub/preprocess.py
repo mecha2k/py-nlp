@@ -43,39 +43,22 @@ if __name__ == "__main__":
 
     df = pd.read_pickle(f"../data/ai.hub/train_news_small_df.pkl")
 
-    def extract_sentence(row):
-        extractive_sentences = ""
-        for idx in row["extractive"]:
-            for sent in row["text"]:
-                if sent and sent[0]["index"] == idx:
-                    extractive_sentences += sent[0]["sentence"] + " "
-        return extractive_sentences
-
-    df["article"] = df.apply(
-        lambda row: " ".join([sent[0]["sentence"] for sent in row["text"] if sent]), axis=1
-    )
-    df["extractive_sentence"] = df.apply(extract_sentence, axis=1)
-
-    samples = df.sample(n=1)
-    text_list = samples["text"].values[0]
-    print(samples["extractive"].values[0])
-    extract_sents = list()
-    for text_item in text_list:
-        for text in text_item:
-            print(text["index"], " : ", text["sentence"])
-
-    for idx in samples["extractive"].values[0]:
-        for text_item in text_list:
+    def arrange_article(row):
+        sentences = list()
+        for text_item in row["text"]:
             for text in text_item:
-                if text["index"] == idx:
-                    extract_sents.append(text["sentence"])
-    print("extractive sentences : ", extract_sents)
+                sentences.insert(text["index"], text["sentence"])
+        return np.array(sentences)
 
-    # df["extractive_sents"] = df.apply(lambda row: list(np.array(row[])), axis=1)
-    # print(df.info())
-    # print(df.category.value_counts())
-    # print(df.media_name.value_counts())
-    #
-    print("article : ", samples["article"].values[0])
-    print("extractive : ", samples["abstractive"].values[0])
-    print("abstractive : ", samples["extractive_sentence"].values[0])
+    df["article"] = df.apply(arrange_article, axis=1)
+    df["extractive_sents"] = df.apply(lambda row: row["article"][row["extractive"]], axis=1)
+
+    print(df.info())
+    print(df.category.value_counts())
+    print(df.media_name.value_counts())
+
+    sample = df.sample(n=1)
+    for idx, sent in enumerate(sample["article"].values[0]):
+        print(idx, " : ", sent)
+    print(sample["extractive"].values[0])
+    print(sample["extractive_sents"].values[0])
