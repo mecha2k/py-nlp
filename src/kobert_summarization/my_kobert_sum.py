@@ -115,16 +115,50 @@ class KobertSummarization(LightningModule):
 
         return sentence_scores
 
-    def training_step(self, batch, batch_idx):
-        outputs = self(
-            batch["input_ids"],
-            batch["attention_mask"],
-            batch["start_positions"],
-            batch["end_positions"],
+    @staticmethod
+    def dict_keys(batch):
+        input_ids = batch["input_ids"]
+        attention_mask = batch["attention_mask"]
+        token_type_ids = batch["token_type_ids"]
+        sent_rep_token_ids = batch["sent_rep_token_ids"]
+        sent_rep_masks = batch["sent_rep_masks"]
+        labels = batch["labels"]
+
+        sources, targets = None, None
+        if "sources" and "targets" in batch.keys():
+            sources = batch["sources"]
+            targets = batch["targets"]
+
+        return (
+            input_ids,
+            attention_mask,
+            token_type_ids,
+            sent_rep_token_ids,
+            sent_rep_masks,
+            labels,
+            sources,
+            targets,
         )
-        loss = outputs[0]
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        return loss
+
+    def training_step(self, batch, batch_idx) -> dict:
+        (
+            input_ids,
+            attention_mask,
+            token_type_ids,
+            sent_rep_token_ids,
+            sent_rep_masks,
+            labels,
+            sources,
+            targets,
+        ) = self.dict_keys(batch)
+
+        outputs = self(
+            input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
+        )
+        loss = self.compute_loss(outputs, labels, sent_rep_masks)
+        self.log("train_loss", loss[0])
+
+        return {"loss": loss[0]}
 
     def validation_step(self, batch, batch_idx):
         outputs = self(
