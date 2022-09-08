@@ -57,8 +57,22 @@ if __name__ == "__main__":
     print(df.category.value_counts())
     print(df.media_name.value_counts())
 
+    train_df = df.sample(frac=0.9, random_state=42)
+    valid_df = df.drop(train_df.index, axis=0)
+    print(train_df.info())
+    print(valid_df.info())
+    print(train_df.head())
+    print(valid_df.head())
+
+    train_df.to_pickle(f"../data/ai.hub/train_df.pkl")
+    valid_df.to_pickle(f"../data/ai.hub/valid_df.pkl")
+
     sample = df.sample(n=1)
     for idx, sent in enumerate(sample["article"].values[0]):
         print(idx, " : ", sent)
     print(sample["extractive"].values[0])
     print(sample["extractive_sents"].values[0])
+
+    for idx, data in train_df.iterrows():
+        print(idx, " : ", " ".join(data["extractive_sents"]))
+        break
