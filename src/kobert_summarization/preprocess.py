@@ -38,8 +38,12 @@ def preprocess_data(section):
 
 
 if __name__ == "__main__":
-    # for section in ["news", "columns"]:
-    #     preprocess_data(section)
+    for section in ["news"]:
+        preprocess_data(section)
+        df = pd.read_pickle(f"../data/ai.hub/train_news_df.pkl")
+        print(df.info())
+        df = df[:2000]
+        df.to_pickle(f"../data/ai.hub/train_news_small_df.pkl")
 
     df = pd.read_pickle(f"../data/ai.hub/train_news_small_df.pkl")
 

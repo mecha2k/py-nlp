@@ -1,3 +1,4 @@
+import pandas as pd
 import torch
 import torch.nn as nn
 import transformers
@@ -13,7 +14,7 @@ from transformers.data.metrics import acc_and_f1
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
-from tensorflow.keras.utils import pad_sequences
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 from datasets import load_metric
 from argparse import Namespace
 
@@ -24,54 +25,82 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class DataModule(LightningDataModule):
-    def __init__(self, args):
+    def __init__(self, hparams):
         super().__init__()
-        self.args = args
-        self.tokenizer = AutoTokenizer.from_pretrained(self.args.model_name_or_path)
-        self.train_dataset = None
-        self.val_dataset = None
-        self.test_dataset = None
+        self.tokenizer = AutoTokenizer.from_pretrained(hparams.model_name)
+        self.data_dir = hparams.data_dir
+        self.batch_size = hparams.batch_size
+        self.max_seq_len = hparams.max_seq_len
+        self.datasets = dict()
 
     def prepare_data(self):
-        pass
+        data_types = ["train", "valid", "test"]
+        for data_type in data_types:
+            data_file = f"{self.data_dir}/{data_type}_df.pkl"
+            if os.path.exists(data_file):
+                self.datasets[data_type] = pd.read_pickle(data_file)
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
-            self.train_dataset = load_dataset("squad", split="train")
-            self.val_dataset = load_dataset("squad", split="validation")
-
+            logger.info("Loading train data...")
         if stage == "test" or stage is None:
-            self.test_dataset = load_dataset("squad", split="validation")
+            logger.info("Loading test data...")
 
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
-            batch_size=self.args.train_batch_size,
+            batch_size=self.batch_size,
             shuffle=True,
-            num_workers=self.args.num_workers,
-            pin_memory=True,
+            collate_fn=self.collate_fn,
         )
 
     def val_dataloader(self):
         return DataLoader(
-            self.val_dataset,
-            batch_size=self.args.eval_batch_size,
-            shuffle=False,
-            num_workers=self.args.num_workers,
-            pin_memory=True,
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            collate_fn=self.collate_fn,
         )
 
     def test_dataloader(self):
         return DataLoader(
-            self.test_dataset,
-            batch_size=self.args.eval_batch_size,
-            shuffle=False,
-            num_workers=self.args.num_workers,
-            pin_memory=True,
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            collate_fn=self.collate_fn,
         )
 
     def collate_fn(self, batch):
-        pass
+        input_ids = [item["input_ids"] for item in batch]
+        attention_mask = [[1] * len(input_id) for input_id in input_ids]
+        token_type_ids = [item["token_type_ids"] for item in batch]
+        sent_rep_token_ids = [item["sent_rep_token_ids"] for item in batch]
+        labels = [item["labels"] for item in batch]
+
+        input_ids = pad_sequences(input_ids, maxlen=self.max_seq_len, padding="post")
+        attention_mask = pad_sequences(attention_mask, maxlen=self.max_seq_len, padding="post")
+        token_type_ids = pad_sequences(token_type_ids, maxlen=self.max_seq_len, padding="post")
+        sent_rep_token_ids = pad_sequences(sent_rep_token_ids, padding="post", value=-1)
+        labels = pad_sequences(labels, padding="post")
+
+        sent_rep_masks = ~(sent_rep_token_ids == -1)
+        sent_rep_token_ids[~sent_rep_masks] = 0
+
+        sources, targets = None, None
+        if "source" and "target" in batch[0].keys():
+            sources = [item["source"] for item in batch]
+            targets = [item["target"] for item in batch]
+
+        return {
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
+            "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+            "token_type_ids": torch.tensor(token_type_ids, dtype=torch.long),
+            "sent_rep_token_ids": torch.tensor(sent_rep_token_ids, dtype=torch.long),
+            "sent_rep_masks": torch.tensor(sent_rep_masks, dtype=torch.bool),
+            "labels": torch.tensor(labels, dtype=torch.long),
+            "sources": sources,
+            "targets": targets,
+        }
 
 
 class SimpleLinearClassifier(nn.Module):
@@ -93,7 +122,7 @@ class KobertSummarization(LightningModule):
         self.tokenizer = AutoTokenizer.from_pretrained("monologg/kobert")
         self.model = AutoModel.from_pretrained("monologg/kobert")
         self.classifier = SimpleLinearClassifier(self.model.config.hidden_size)
-        self.loss_fn = nn.CrossEntropyLoss()
+        self.loss_fn = nn.BCEWithLogitsLoss(reduction="none")
         self.metric = load_metric("squad")
 
     def forward(
@@ -183,22 +212,70 @@ class KobertSummarization(LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = AdamW(self.parameters(), lr=self.args.learning_rate)
-        return optimizer
-
-    def get_predictions(self, model, dataloader, compute_metrics=False):
-        all_start_logits = []
-        all_end_logits = []
-        all_attention_masks = []
-        all_input_ids = []
-        all_contexts = []
-        all_questions = []
-        all_answers = []
-
-        for batch in dataloader:
-            with torch.no_grad():
-                outputs = model(batch["input_ids"], batch[""])
+        no_decay = ["bias", "LayerNorm.weight"]
+        params_decay = [
+            p for n, p in self.named_parameters() if not any(nd in n for nd in no_decay)
+        ]
+        params_no_decay = [p for n, p in self.named_parameters() if any(nd in n for nd in no_decay)]
+        parameters = [
+            {"params": params_decay, "weight_decay": self.hparams.weight_decay},
+            {"params": params_no_decay, "weight_decay": 0.0},
+        ]
+        return torch.optim.AdamW(parameters, lr=self.hparams.learning_rate, eps=1e-8)
 
 
 if __name__ == "__main__":
-    pass
+    hparams = Namespace(
+        data_dir="../data/ai.hub",
+        model_dir="../data/ai.hub/checkpoints",
+        model_file="../data/ai.hub/checkpoints/kobert-ext-sum.ckpt",
+        load_from_checkpoint=False,
+        model_name="monologg/kobert",
+        learning_rate=1e-5,
+        batch_size=32,
+        num_epochs=100,
+        max_seq_len=512,
+        weight_decay=0.01,
+        top_k_sentences=2,
+    )
+
+    dm = DataModule(hparams)
+
+    # if hparams.load_from_checkpoint:
+    #     model = ExtractiveSummarization.load_from_checkpoint(hparams.model_file, strict=False)
+    # else:
+    #     model = ExtractiveSummarization(hparams=hparams)
+    #
+    # checkpoint_callback = ModelCheckpoint(
+    #     dirpath=hparams.model_dir,
+    #     filename="my-bert-base-uncased-{epoch}",
+    #     save_top_k=2,
+    #     monitor="train_loss",
+    #     mode="min",
+    #     verbose=True,
+    # )
+    #
+    # trainer = Trainer(
+    #     max_epochs=hparams.num_epochs,
+    #     max_steps=1000,
+    #     accelerator="auto",
+    #     devices="auto",
+    #     callbacks=[
+    #         checkpoint_callback,
+    #         LearningRateMonitor(),
+    #         EarlyStopping(monitor="val_loss", mode="min", patience=5),
+    #         TQDMProgressBar(refresh_rate=20),
+    #     ],
+    # )
+    #
+    # # trainer.fit(model, datamodule=cnn_dm)
+    # # trainer.test(model, datamodule=cnn_dm)
+    #
+    # cnn_dm.prepare_data()
+    # cnn_dm.setup(stage="test")
+    #
+    # idx = np.random.randint(0, 1000)
+    # input_sentences = cnn_dm.datasets["test"][idx]["sources"]
+    # predictions = model.predict_sentences(input_sentences, top_k=hparams.top_k_sentences)
+    # print(predictions)
+    # print(cnn_dm.datasets["test"][idx]["targets"])
