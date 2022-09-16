@@ -24,6 +24,142 @@ transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
+def _get_ngrams(n_gram: int, text: list) -> set:
+    ngram_set = set()
+    text_length = len(text)
+    max_index_ngram_start = text_length - n_gram
+    for i in range(max_index_ngram_start + 1):
+        ngram_set.add(tuple(text[i : i + n_gram]))
+    return ngram_set
+
+
+def _block_trigrams(candidate: str, prediction: list) -> bool:
+    tri_c = _get_ngrams(3, candidate.split())
+    for s in prediction:
+        tri_s = _get_ngrams(3, s.split())
+        if len(tri_c.intersection(tri_s)) > 0:
+            return True
+    return False
+
+
+def _get_input_ids(
+    tokenizer,
+    src_txt,
+    bert_compatible_cls=True,
+    max_length=None,
+):
+    sep_token = tokenizer.sep_token
+    cls_token = tokenizer.cls_token
+    if max_length is None:
+        max_length = list(tokenizer.max_model_input_sizes.values())[0]
+        if max_length > tokenizer.model_max_length:
+            max_length = tokenizer.model_max_length
+
+    if bert_compatible_cls:
+        unk_token = str(tokenizer.unk_token)
+        src_txt = [
+            sent.replace(sep_token, unk_token).replace(cls_token, unk_token) for sent in src_txt
+        ]
+
+        if not len(src_txt) < 2:
+            separation_string = " " + sep_token + " " + cls_token + " "
+            text = separation_string.join(src_txt)
+        else:
+            try:
+                text = src_txt[0]
+            except IndexError:
+                text = src_txt
+
+        src_subtokens = tokenizer.tokenize(text)
+        src_subtokens = src_subtokens[: (max_length - 2)]
+        src_subtokens.insert(0, cls_token)
+        src_subtokens.append(sep_token)
+        input_ids = tokenizer.convert_tokens_to_ids(src_subtokens)
+    else:
+        input_ids = tokenizer.encode(
+            src_txt,
+            add_special_tokens=True,
+            max_length=min(max_length, tokenizer.model_max_length),
+        )
+
+    return input_ids
+
+
+def load_json(json_file):
+    documents = None
+    file_path, file_extension = os.path.splitext(json_file)
+    if file_extension == ".json":
+        with open(json_file, "r") as json_file_object:
+            documents = json.load(json_file_object)
+    elif file_extension == ".gz":
+        file_path = os.path.splitext(file_path)[0]
+        with gzip.open(json_file, "r") as json_gzip:
+            json_bytes = json_gzip.read()
+        json_str = json_bytes.decode("utf-8")
+        documents = json.loads(json_str)
+    else:
+        logger.error("File extension %s is not recognized. ('.json' or '.gz')", file_extension)
+    return documents, file_path
+
+
+def df_to_dataset(tokenizer, inputs=None, data_type="train"):
+    logger.info("Processing %s data...", data_type)
+
+    datasets = list()
+    for idx, doc in inputs.iterrows():
+        if idx % 1000 == 0:
+            logger.info("Generating features for example %s/%s", idx, len(inputs))
+        sources = [" ".join(sent) for sent in document["src"]]
+
+        input_ids = _get_input_ids(tokenizer, sources, bert_compatible_cls=True)
+        attention_mask = [1] * len(input_ids)
+
+        token_type_ids = []
+        segment_flag = True
+        for ids in input_ids:
+            token_type_ids += [0 if segment_flag else 1]
+            if ids == tokenizer.sep_token_id:
+                segment_flag = not segment_flag
+
+        sent_rep_id = tokenizer.sep_token_id
+        sent_rep_token_ids = [i for i, t in enumerate(input_ids) if t == sent_rep_id]
+        labels = document["labels"][: len(sent_rep_token_ids)]
+
+        datasets.append(
+            {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "token_type_ids": token_type_ids,
+                "sent_rep_token_ids": sent_rep_token_ids,
+                "labels": labels,
+                "sources": sources,
+                "targets": document["tgt"] if "tgt" in document else None,
+            }
+        )
+
+    return datasets
+
+
+def preprocess_datasets(hparams):
+    tokenizer = AutoTokenizer.from_pretrained(hparams.model_name, use_fast=True)
+    print(tokenizer.model_max_length)
+
+    data_types = ["train", "valid"]
+    for data_type in data_types:
+        datasets = pd.read_pickle(f"{hparams.data_dir}/{data_type}_df.pkl")
+        df_to_dataset(tokenizer, datasets, data_type=data_type)
+        print(datasets.info())
+
+        # data = list()
+        # for inputs in enumerate(json_files):
+        #     data.append(df_to_dataset(tokenizer, inputs))
+        # datasets[data_type] = np.concatenate(data, axis=0)
+        # np.save(
+        #     os.path.join(hparams.data_dir, "dataset_" + data_type + "_small.npy"),
+        #     datasets[data_type],
+        # )
+
+
 class DataModule(LightningDataModule):
     def __init__(self, hparams):
         super().__init__()
@@ -239,7 +375,21 @@ if __name__ == "__main__":
         top_k_sentences=2,
     )
 
-    dm = DataModule(hparams)
+    preprocess_datasets(hparams)
+
+    # dm = DataModule(hparams)
+    #
+    # dm.prepare_data()
+    # print("train_dataset", len(dm.datasets["train"]))
+    #
+    # train_df = dm.datasets["train"]
+    # print(train_df.info())
+    # print(train_df.iloc[0]["extractive_sents"])
+    #
+    # article = " ".join(train_df.iloc[0]["article"])
+    # extractive_sents = " ".join(train_df.iloc[0]["extractive_sents"])
+    # print(article)
+    # print(extractive_sents)
 
     # if hparams.load_from_checkpoint:
     #     model = ExtractiveSummarization.load_from_checkpoint(hparams.model_file, strict=False)
