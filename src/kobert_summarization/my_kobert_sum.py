@@ -346,6 +346,87 @@ class KobertSummarization(LightningModule):
         ]
         return torch.optim.AdamW(parameters, lr=self.hparams.learning_rate, eps=1e-8)
 
+    def compute_loss(self, outputs, labels, masks):
+        loss = self.loss_fn(outputs, labels.float()) * masks.float()
+
+        sum_loss_per_sequence = loss.sum(dim=1)
+        num_not_padded_per_sequence = masks.sum(dim=1).float()
+        average_per_sequence = sum_loss_per_sequence / num_not_padded_per_sequence
+
+        sum_avg_seq_loss = average_per_sequence.sum()
+        batch_size = average_per_sequence.size(0)
+        mean_avg_seq_loss = sum_avg_seq_loss / batch_size
+
+        total_loss = sum_loss_per_sequence.sum()
+        total_num_not_padded = num_not_padded_per_sequence.sum().float()
+        average_loss = total_loss / total_num_not_padded
+        total_norm_batch_loss = total_loss / batch_size
+
+        return (
+            total_loss,
+            total_norm_batch_loss,
+            sum_avg_seq_loss,
+            mean_avg_seq_loss,
+            average_loss,
+        )
+
+    def predict_sentences(self, input_sentences, top_k, raw_scores=False):
+        source_txt = [
+            " ".join([token.text for token in self.nlp(sentence) if str(token) != "."]) + "."
+            for sentence in input_sentences
+        ]
+
+        input_ids = _get_input_ids(self.tokenizer, source_txt, bert_compatible_cls=True)
+        attention_mask = [1] * len(input_ids)
+
+        maxlen = getattr(self.hparams, "max_seq_len", self.tokenizer.model_max_length)
+        sep_token_id = self.tokenizer.sep_token_id
+
+        token_type_ids = []
+        segment_flag = True
+        for ids in input_ids:
+            token_type_ids += [0 if segment_flag else 1]
+            if ids == sep_token_id:
+                segment_flag = not segment_flag
+
+        sent_rep_token_ids = [i for i, t in enumerate(input_ids) if t == sep_token_id]
+        sent_rep_masks = [1] * len(sent_rep_token_ids)
+
+        input_ids = pad_sequences([input_ids], maxlen=maxlen, padding="post")
+        attention_mask = pad_sequences([attention_mask], maxlen=maxlen, padding="post")
+        token_type_ids = pad_sequences([token_type_ids], maxlen=maxlen, padding="post")
+        sent_rep_token_ids = pad_sequences([sent_rep_token_ids], padding="post", value=-1)
+        sent_rep_masks = pad_sequences([sent_rep_masks], padding="post", value=-1)
+
+        input_ids = torch.tensor(input_ids, dtype=torch.long)
+        attention_mask = torch.tensor(attention_mask, dtype=torch.long)
+        token_type_ids = torch.tensor(token_type_ids, dtype=torch.long)
+        sent_rep_token_ids = torch.tensor(sent_rep_token_ids, dtype=torch.long)
+        sent_rep_masks = torch.tensor(sent_rep_masks, dtype=torch.long)
+
+        self.eval()
+        with torch.no_grad():
+            outputs = self(
+                input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
+            )
+            outputs = torch.sigmoid(outputs)
+
+        if raw_scores:
+            sent_scores = list(zip(source_txt, outputs.tolist()[0]))
+            return sent_scores
+
+        sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
+        logger.debug("Sorted sentence ids: %s", sorted_ids)
+        selected_ids = sorted_ids[0, :top_k]
+        logger.debug("Selected sentence ids: %s", selected_ids)
+
+        selected_sents = []
+        selected_ids.sort()
+        for i in selected_ids:
+            selected_sents.append(source_txt[i])
+
+        return " ".join(selected_sents).strip()
+
 
 if __name__ == "__main__":
     hparams = Namespace(

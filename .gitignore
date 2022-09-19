@@ -376,4 +376,3 @@ dmypy.json
 /master/kobertsum/ext/
 /master/transformer-sum/src/lightning_logs/
 /src/bert_summarization/lightning_logs/
-/datasets/
