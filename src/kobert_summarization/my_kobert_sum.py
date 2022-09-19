@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -109,8 +110,11 @@ def df_to_dataset(tokenizer, inputs=None, data_type="train"):
     for idx, doc in inputs.iterrows():
         if idx % 1000 == 0:
             logger.info("Generating features for example %s/%s", idx, len(inputs))
-        sources = [" ".join(sent) for sent in document["src"]]
 
+        labels = np.zeros(len(doc["article"]), dtype=np.int64)
+        labels[doc["extractive"]] = 1
+
+        sources = [" ".join(sent) for sent in doc["article"]]
         input_ids = _get_input_ids(tokenizer, sources, bert_compatible_cls=True)
         attention_mask = [1] * len(input_ids)
 
@@ -123,7 +127,7 @@ def df_to_dataset(tokenizer, inputs=None, data_type="train"):
 
         sent_rep_id = tokenizer.sep_token_id
         sent_rep_token_ids = [i for i, t in enumerate(input_ids) if t == sent_rep_id]
-        labels = document["labels"][: len(sent_rep_token_ids)]
+        labels = labels[: len(sent_rep_token_ids)]
 
         datasets.append(
             {
@@ -133,31 +137,34 @@ def df_to_dataset(tokenizer, inputs=None, data_type="train"):
                 "sent_rep_token_ids": sent_rep_token_ids,
                 "labels": labels,
                 "sources": sources,
-                "targets": document["tgt"] if "tgt" in document else None,
+                "targets": doc["abstractive"],
             }
         )
 
-    return datasets
+    return np.array(datasets)
 
 
 def preprocess_datasets(hparams):
     tokenizer = AutoTokenizer.from_pretrained(hparams.model_name, use_fast=True)
     print(tokenizer.model_max_length)
+    print(tokenizer.sep_token)
+    print(tokenizer.cls_token)
+    print(tokenizer.unk_token)
+    print(tokenizer.pad_token)
+    print(tokenizer.sep_token_id)
+    print(tokenizer.cls_token_id)
+    print(tokenizer.unk_token_id)
+    print(tokenizer.pad_token_id)
 
+    datasets = dict()
     data_types = ["train", "valid"]
     for data_type in data_types:
-        datasets = pd.read_pickle(f"{hparams.data_dir}/{data_type}_df.pkl")
-        df_to_dataset(tokenizer, datasets, data_type=data_type)
-        print(datasets.info())
-
-        # data = list()
-        # for inputs in enumerate(json_files):
-        #     data.append(df_to_dataset(tokenizer, inputs))
-        # datasets[data_type] = np.concatenate(data, axis=0)
-        # np.save(
-        #     os.path.join(hparams.data_dir, "dataset_" + data_type + "_small.npy"),
-        #     datasets[data_type],
-        # )
+        df = pd.read_pickle(f"{hparams.data_dir}/{data_type}_df.pkl")
+        datasets[data_type] = df_to_dataset(tokenizer, df, data_type=data_type)
+        np.save(
+            os.path.join(hparams.data_dir, "dataset_" + data_type + "_small.npy"),
+            datasets[data_type],
+        )
 
 
 class DataModule(LightningDataModule):
@@ -376,6 +383,18 @@ if __name__ == "__main__":
     )
 
     preprocess_datasets(hparams)
+
+    # datasets = dict()
+    # data_types = ["train", "valid"]
+    # for data_type in data_types:
+    #     datasets[data_type] = np.load(
+    #         os.path.join(hparams.data_dir, "dataset_" + data_type + "_small.npy"), allow_pickle=True
+    #     )
+
+    # a = np.zeros(10, dtype=np.int32)
+    # print(a)
+    # a[[2, 5]] = 1
+    # print(a)
 
     # dm = DataModule(hparams)
     #
