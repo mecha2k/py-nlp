@@ -86,23 +86,6 @@ def _get_input_ids(
     return input_ids
 
 
-def load_json(json_file):
-    documents = None
-    file_path, file_extension = os.path.splitext(json_file)
-    if file_extension == ".json":
-        with open(json_file, "r") as json_file_object:
-            documents = json.load(json_file_object)
-    elif file_extension == ".gz":
-        file_path = os.path.splitext(file_path)[0]
-        with gzip.open(json_file, "r") as json_gzip:
-            json_bytes = json_gzip.read()
-        json_str = json_bytes.decode("utf-8")
-        documents = json.loads(json_str)
-    else:
-        logger.error("File extension %s is not recognized. ('.json' or '.gz')", file_extension)
-    return documents, file_path
-
-
 def df_to_dataset(tokenizer, inputs=None, data_type="train"):
     logger.info("Processing %s data...", data_type)
 
@@ -177,11 +160,12 @@ class DataModule(LightningDataModule):
         self.datasets = dict()
 
     def prepare_data(self):
-        data_types = ["train", "valid", "test"]
+        data_types = ["train", "valid"]
         for data_type in data_types:
-            data_file = f"{self.data_dir}/{data_type}_df.pkl"
-            if os.path.exists(data_file):
-                self.datasets[data_type] = pd.read_pickle(data_file)
+            self.datasets[data_type] = np.load(
+                os.path.join(self.data_dir, "dataset_" + data_type + "_small.npy"),
+                allow_pickle=True,
+            )
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
@@ -191,7 +175,7 @@ class DataModule(LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset,
+            self.datasets["train"],
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=self.collate_fn,
@@ -199,7 +183,7 @@ class DataModule(LightningDataModule):
 
     def val_dataloader(self):
         return DataLoader(
-            self.train_dataset,
+            self.datasets["valid"],
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=self.collate_fn,
@@ -207,7 +191,7 @@ class DataModule(LightningDataModule):
 
     def test_dataloader(self):
         return DataLoader(
-            self.train_dataset,
+            self.datasets["test"],
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=self.collate_fn,
@@ -215,7 +199,7 @@ class DataModule(LightningDataModule):
 
     def collate_fn(self, batch):
         input_ids = [item["input_ids"] for item in batch]
-        attention_mask = [[1] * len(input_id) for input_id in input_ids]
+        attention_mask = [item["attention_mask"] for item in batch]
         token_type_ids = [item["token_type_ids"] for item in batch]
         sent_rep_token_ids = [item["sent_rep_token_ids"] for item in batch]
         labels = [item["labels"] for item in batch]
@@ -333,26 +317,22 @@ class KobertSummarization(LightningModule):
         return {"loss": loss[0]}
 
     def validation_step(self, batch, batch_idx):
-        outputs = self(
-            batch["input_ids"],
-            batch["attention_mask"],
-            batch["start_positions"],
-            batch["end_positions"],
-        )
-        loss = outputs[0]
-        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        return loss
+        (
+            input_ids,
+            attention_mask,
+            token_type_ids,
+            sent_rep_token_ids,
+            sent_rep_masks,
+            labels,
+            sources,
+            targets,
+        ) = self.dict_keys(batch)
 
-    def test_step(self, batch, batch_idx):
         outputs = self(
-            batch["input_ids"],
-            batch["attention_mask"],
-            batch["start_positions"],
-            batch["end_positions"],
+            input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
         )
-        loss = outputs[0]
-        self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        return loss
+        loss = self.compute_loss(outputs, labels, sent_rep_masks)
+        self.log("val_loss", loss[0], prog_bar=True)
 
     def configure_optimizers(self):
         no_decay = ["bias", "LayerNorm.weight"]
@@ -382,64 +362,40 @@ if __name__ == "__main__":
         top_k_sentences=2,
     )
 
-    preprocess_datasets(hparams)
+    # preprocess_datasets(hparams)
 
-    # datasets = dict()
-    # data_types = ["train", "valid"]
-    # for data_type in data_types:
-    #     datasets[data_type] = np.load(
-    #         os.path.join(hparams.data_dir, "dataset_" + data_type + "_small.npy"), allow_pickle=True
-    #     )
+    dm = DataModule(hparams)
 
-    # a = np.zeros(10, dtype=np.int32)
-    # print(a)
-    # a[[2, 5]] = 1
-    # print(a)
+    if hparams.load_from_checkpoint:
+        model = KobertSummarization.load_from_checkpoint(hparams.model_file, strict=False)
+    else:
+        model = KobertSummarization(hparams=hparams)
 
-    # dm = DataModule(hparams)
-    #
-    # dm.prepare_data()
-    # print("train_dataset", len(dm.datasets["train"]))
-    #
-    # train_df = dm.datasets["train"]
-    # print(train_df.info())
-    # print(train_df.iloc[0]["extractive_sents"])
-    #
-    # article = " ".join(train_df.iloc[0]["article"])
-    # extractive_sents = " ".join(train_df.iloc[0]["extractive_sents"])
-    # print(article)
-    # print(extractive_sents)
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=hparams.model_dir,
+        filename="my-kobert-base-{epoch}",
+        save_top_k=2,
+        monitor="train_loss",
+        mode="min",
+        verbose=True,
+    )
 
-    # if hparams.load_from_checkpoint:
-    #     model = ExtractiveSummarization.load_from_checkpoint(hparams.model_file, strict=False)
-    # else:
-    #     model = ExtractiveSummarization(hparams=hparams)
-    #
-    # checkpoint_callback = ModelCheckpoint(
-    #     dirpath=hparams.model_dir,
-    #     filename="my-bert-base-uncased-{epoch}",
-    #     save_top_k=2,
-    #     monitor="train_loss",
-    #     mode="min",
-    #     verbose=True,
-    # )
-    #
-    # trainer = Trainer(
-    #     max_epochs=hparams.num_epochs,
-    #     max_steps=1000,
-    #     accelerator="auto",
-    #     devices="auto",
-    #     callbacks=[
-    #         checkpoint_callback,
-    #         LearningRateMonitor(),
-    #         EarlyStopping(monitor="val_loss", mode="min", patience=5),
-    #         TQDMProgressBar(refresh_rate=20),
-    #     ],
-    # )
-    #
-    # # trainer.fit(model, datamodule=cnn_dm)
-    # # trainer.test(model, datamodule=cnn_dm)
-    #
+    trainer = Trainer(
+        max_epochs=hparams.num_epochs,
+        max_steps=1000,
+        accelerator="auto",
+        devices="auto",
+        callbacks=[
+            checkpoint_callback,
+            LearningRateMonitor(),
+            EarlyStopping(monitor="val_loss", mode="min", patience=5),
+            TQDMProgressBar(refresh_rate=20),
+        ],
+    )
+
+    trainer.fit(model, datamodule=dm)
+    # trainer.test(model, datamodule=dm)
+
     # cnn_dm.prepare_data()
     # cnn_dm.setup(stage="test")
     #
