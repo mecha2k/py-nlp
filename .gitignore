@@ -11,15 +11,13 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-src/data
+/src/data
 
 .DS_Store
 .vscode
 
 
-master/kobertsum/ext
-datasets
-
+/master/kobertsum/ext
 /src/kobert_summarization/lightning_logs
 
 
@@ -379,4 +377,3 @@ dmypy.json
 /master/transformer-sum/src/lightning_logs/
 /src/bert_summarization/lightning_logs/
 /datasets/
-/src/transformers/
