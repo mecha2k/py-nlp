@@ -379,3 +379,4 @@ dmypy.json
 /master/transformer-sum/src/lightning_logs/
 /src/bert_summarization/lightning_logs/
 /datasets/
+/src/transformers/
