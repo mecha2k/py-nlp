@@ -23,6 +23,7 @@ from argparse import Namespace
 logger = logging.getLogger(__name__)
 transformers.logging.set_verbosity_error()
 warnings.filterwarnings("ignore", category=UserWarning)
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def _get_ngrams(n_gram: int, text: list) -> set:
@@ -140,12 +141,12 @@ def preprocess_datasets(hparams):
     print(tokenizer.pad_token_id)
 
     datasets = dict()
-    data_types = ["train", "valid"]
+    data_types = ["train", "valid", "test"]
     for data_type in data_types:
-        df = pd.read_pickle(f"{hparams.data_dir}/{data_type}_df.pkl")
+        df = pd.read_pickle(f"{hparams.data_dir}/{data_type}_news_final_df.pkl")
         datasets[data_type] = df_to_dataset(tokenizer, df, data_type=data_type)
         np.save(
-            os.path.join(hparams.data_dir, "dataset_" + data_type + "_small.npy"),
+            os.path.join(hparams.data_dir, "dataset_" + data_type + "_news_final.npy"),
             datasets[data_type],
         )
 
@@ -160,10 +161,10 @@ class DataModule(LightningDataModule):
         self.datasets = dict()
 
     def prepare_data(self):
-        data_types = ["train", "valid"]
+        data_types = ["train", "valid", "test"]
         for data_type in data_types:
             self.datasets[data_type] = np.load(
-                os.path.join(self.data_dir, "dataset_" + data_type + "_small.npy"),
+                os.path.join(self.data_dir, "dataset_" + data_type + "_news_final.npy"),
                 allow_pickle=True,
             )
 
@@ -474,14 +475,15 @@ if __name__ == "__main__":
         ],
     )
 
-    trainer.fit(model, datamodule=dm)
+    # trainer.fit(model, datamodule=dm)
     # trainer.test(model, datamodule=dm)
 
-    # cnn_dm.prepare_data()
-    # cnn_dm.setup(stage="test")
-    #
-    # idx = np.random.randint(0, 1000)
-    # input_sentences = cnn_dm.datasets["test"][idx]["sources"]
-    # predictions = model.predict_sentences(input_sentences, top_k=hparams.top_k_sentences)
-    # print(predictions)
-    # print(cnn_dm.datasets["test"][idx]["targets"])
+    dm.prepare_data()
+    dm.setup(stage="test")
+
+    idx = np.random.randint(0, 1000)
+    input_sentences = dm.datasets["test"][idx]["sources"]
+    print("Input sentences: ", input_sentences)
+    predictions = model.predict_sentences(input_sentences, top_k=hparams.top_k_sentences)
+    print("Predictions: ", predictions)
+    print("Targets: ", dm.datasets["test"][idx]["targets"])
