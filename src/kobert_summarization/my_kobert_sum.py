@@ -386,13 +386,12 @@ class KobertSummarization(LightningModule):
             current_prediction = "<q>".join(current_prediction)
             predictions.append(current_prediction)
 
-        with open("../data/cnn_daily/save_gold.txt", "w", encoding="utf-8") as save_gold, open(
-            "../data/cnn_daily/save_pred.txt", "w", encoding="utf-8"
-        ) as save_pred:
-            for target in targets:
-                save_gold.write(target.strip() + "\n")
-            for prediction in predictions:
-                save_pred.write(prediction.strip() + "\n")
+        with open("../data/cnn_daily/save_gold.txt", "w", encoding="utf-8") as save_gold:
+            with open("../data/cnn_daily/save_pred.txt", "w", encoding="utf-8") as save_pred:
+                for target in targets:
+                    save_gold.write(target.strip() + "\n")
+                for prediction in predictions:
+                    save_pred.write(prediction.strip() + "\n")
 
         return OrderedDict(
             {
