@@ -254,6 +254,8 @@ class KobertSummarization(LightningModule):
         self.classifier = SimpleLinearClassifier(self.model.config.hidden_size)
         self.loss_fn = nn.BCEWithLogitsLoss(reduction="none")
         self.metric = load_metric("squad")
+        self.save_gold = os.path.join(self.hparams.data_dir, "save_gold.txt")
+        self.save_pred = os.path.join(self.hparams.data_dir, "save_pred.txt")
 
     def forward(
         self, input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
@@ -386,8 +388,8 @@ class KobertSummarization(LightningModule):
             current_prediction = "<q>".join(current_prediction)
             predictions.append(current_prediction)
 
-        with open("../data/cnn_daily/save_gold.txt", "w", encoding="utf-8") as save_gold:
-            with open("../data/cnn_daily/save_pred.txt", "w", encoding="utf-8") as save_pred:
+        with open(self.save_gold, "w", encoding="utf-8") as save_gold:
+            with open(self.save_pred, "w", encoding="utf-8") as save_pred:
                 for target in targets:
                     save_gold.write(target.strip() + "\n")
                 for prediction in predictions:
@@ -402,12 +404,8 @@ class KobertSummarization(LightningModule):
         )
 
     def test_epoch_end(self, outputs):
-        predictions = [
-            line.strip() for line in open("../data/cnn_daily/save_pred.txt", encoding="utf-8")
-        ]
-        references = [
-            line.strip() for line in open("../data/cnn_daily/save_gold.txt", encoding="utf-8")
-        ]
+        predictions = [line.strip() for line in open(self.save_pred, encoding="utf-8")]
+        references = [line.strip() for line in open(self.save_gold, encoding="utf-8")]
         assert len(predictions) == len(references)
 
         rouge = load_metric("rouge")
