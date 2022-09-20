@@ -18,6 +18,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, Ea
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from datasets import load_metric
 from argparse import Namespace
+from collections import OrderedDict
 
 
 logger = logging.getLogger(__name__)
@@ -391,6 +392,7 @@ class KobertSummarization(LightningModule):
         with open(self.save_gold, "w", encoding="utf-8") as save_gold:
             with open(self.save_pred, "w", encoding="utf-8") as save_pred:
                 for target in targets:
+                    target = "<q>".join(target)
                     save_gold.write(target.strip() + "\n")
                 for prediction in predictions:
                     save_pred.write(prediction.strip() + "\n")
@@ -408,16 +410,41 @@ class KobertSummarization(LightningModule):
         references = [line.strip() for line in open(self.save_gold, encoding="utf-8")]
         assert len(predictions) == len(references)
 
-        rouge = load_metric("rouge")
-        metric = rouge.compute(predictions=predictions, references=references)
-        self.log("rouge1_f", metric["rouge1"].mid.fmeasure)
-        self.log("rouge2_f", metric["rouge2"].mid.fmeasure)
+        sys_dir = self.hparams + "/rouge/gold"
+        mod_dir = self.hparams + "/rouge/pred"
+        os.makedirs(sys_dir, exist_ok=True)
+        os.makedirs(mod_dir, exist_ok=True)
 
-        return {
-            "acc": torch.stack([x["acc"] for x in outputs]).mean(),
-            "f1": torch.stack([x["f1"] for x in outputs]).mean(),
-            "acc_and_f1": torch.stack([x["acc_and_f1"] for x in outputs]).mean(),
-        }
+        rouge = Rouge155()
+        rouge.system_dir = sys_dir
+        rouge.model_dir = mod_dir
+        rouge.system_filename_pattern = "pred.(\d+).txt"
+        rouge.model_filename_pattern = "gold.(\d+).txt"
+
+        for i, (candidate, reference) in enumerate(zip(candidates, references)):
+            with open(os.path.join(sys_dir, f"pred.{i}.txt"), "w", encoding="utf-8") as f:
+                f.write(candidate.replace("<q>", "\n"))
+            with open(os.path.join(mod_dir, f"gold.{i}.txt"), "w", encoding="utf-8") as f:
+                f.write(reference.replace("<q>", "\n"))
+
+        output = rouge.convert_and_evaluate()
+        output_dict = rouge.output_to_dict(output)
+
+        if os.path.isdir("../data/ai.hub/rouge"):
+            shutil.rmtree("../data/ai.hub/rouge")
+
+        # rouge = load_metric("rouge")
+        # metric = rouge.compute(predictions=predictions, references=references)
+        # self.log("rouge1_f", metric["rouge1"].mid.fmeasure)
+        # self.log("rouge2_f", metric["rouge2"].mid.fmeasure)
+
+        self.log("rouge1_f", output_dict["rouge_1_f_score"])
+        self.log("rouge2_f", output_dict["rouge_2_f_score"])
+        self.log("rougeL_f", output_dict["rouge_l_f_score"])
+
+        self.log("acc", np.stack([x["acc"] for x in outputs]).mean())
+        self.log("f1", np.stack([x["f1"] for x in outputs]).mean())
+        self.log("acc_and_f1", np.stack([x["acc_and_f1"] for x in outputs]).mean())
 
     def configure_optimizers(self):
         no_decay = ["bias", "LayerNorm.weight"]
