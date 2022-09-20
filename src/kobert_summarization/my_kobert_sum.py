@@ -98,7 +98,8 @@ def df_to_dataset(tokenizer, inputs=None, data_type="train"):
         labels = np.zeros(len(doc["article"]), dtype=np.int64)
         labels[doc["extractive"]] = 1
 
-        sources = [" ".join(sent) for sent in doc["article"]]
+        sources = doc["article"]
+        targets = sources[doc["extractive"]]
         input_ids = _get_input_ids(tokenizer, sources, bert_compatible_cls=True)
         attention_mask = [1] * len(input_ids)
 
@@ -121,7 +122,8 @@ def df_to_dataset(tokenizer, inputs=None, data_type="train"):
                 "sent_rep_token_ids": sent_rep_token_ids,
                 "labels": labels,
                 "sources": sources,
-                "targets": doc["abstractive"],
+                "targets": targets,
+                "abstractive": doc["abstractive"],
             }
         )
 
@@ -335,6 +337,92 @@ class KobertSummarization(LightningModule):
         loss = self.compute_loss(outputs, labels, sent_rep_masks)
         self.log("val_loss", loss[0], prog_bar=True)
 
+    def test_step(self, batch, batch_idx):
+        (
+            input_ids,
+            attention_mask,
+            token_type_ids,
+            sent_rep_token_ids,
+            sent_rep_masks,
+            labels,
+            sources,
+            targets,
+        ) = self.dict_keys(batch)
+
+        outputs = self(
+            input_ids, attention_mask, token_type_ids, sent_rep_token_ids, sent_rep_masks
+        )
+        outputs = torch.sigmoid(outputs)
+
+        y_pred = outputs.clone().detach()
+        y_pred[y_pred < 0.5] = 0
+        y_pred[y_pred >= 0.5] = 1
+        y_pred = torch.flatten(y_pred).cpu().numpy()
+        y_true = torch.flatten(labels).cpu().numpy()
+        result = acc_and_f1(y_pred, y_true)
+
+        sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
+
+        predictions = []
+        for idx, (source, source_ids, target) in enumerate(zip(sources, sorted_ids, targets)):
+            current_prediction = []
+            for sent_idx, i in enumerate(source_ids):
+                if i >= len(source):
+                    logger.debug(
+                        "Only %i examples selected from document %i in batch %i. This is likely because some sentences "
+                        + "received ranks so small they rounded to zero and a padding 'sentence' was randomly chosen.",
+                        sent_idx + 1,
+                        idx,
+                        batch_idx,
+                    )
+                    continue
+
+                candidate = source[i].strip()
+                if not _block_trigrams(candidate, current_prediction):
+                    current_prediction.append(candidate)
+
+                if len(current_prediction) >= self.hparams.top_k_sentences:
+                    break
+
+            current_prediction = "<q>".join(current_prediction)
+            predictions.append(current_prediction)
+
+        with open("../data/cnn_daily/save_gold.txt", "w", encoding="utf-8") as save_gold, open(
+            "../data/cnn_daily/save_pred.txt", "w", encoding="utf-8"
+        ) as save_pred:
+            for target in targets:
+                save_gold.write(target.strip() + "\n")
+            for prediction in predictions:
+                save_pred.write(prediction.strip() + "\n")
+
+        return OrderedDict(
+            {
+                "acc": torch.tensor(result["acc"]),
+                "f1": torch.tensor(result["f1"]),
+                "acc_and_f1": torch.tensor(result["acc_and_f1"]),
+            }
+        )
+
+    def test_epoch_end(self, outputs):
+        predictions = [
+            line.strip() for line in open("../data/cnn_daily/save_pred.txt", encoding="utf-8")
+        ]
+        references = [
+            line.strip() for line in open("../data/cnn_daily/save_gold.txt", encoding="utf-8")
+        ]
+        assert len(predictions) == len(references)
+
+        rouge = load_metric("rouge")
+        metric = rouge.compute(predictions=predictions, references=references)
+        self.log("rouge1_f", metric["rouge1"].mid.fmeasure)
+        self.log("rouge2_f", metric["rouge2"].mid.fmeasure)
+
+        return {
+            "acc": torch.stack([x["acc"] for x in outputs]).mean(),
+            "f1": torch.stack([x["f1"] for x in outputs]).mean(),
+            "acc_and_f1": torch.stack([x["acc_and_f1"] for x in outputs]).mean(),
+        }
+
     def configure_optimizers(self):
         no_decay = ["bias", "LayerNorm.weight"]
         params_decay = [
@@ -372,12 +460,7 @@ class KobertSummarization(LightningModule):
         )
 
     def predict_sentences(self, input_sentences, top_k, raw_scores=False):
-        source_txt = [
-            " ".join([token.text for token in self.nlp(sentence) if str(token) != "."]) + "."
-            for sentence in input_sentences
-        ]
-
-        input_ids = _get_input_ids(self.tokenizer, source_txt, bert_compatible_cls=True)
+        input_ids = _get_input_ids(self.tokenizer, input_sentences, bert_compatible_cls=True)
         attention_mask = [1] * len(input_ids)
 
         maxlen = getattr(self.hparams, "max_seq_len", self.tokenizer.model_max_length)
@@ -413,7 +496,7 @@ class KobertSummarization(LightningModule):
             outputs = torch.sigmoid(outputs)
 
         if raw_scores:
-            sent_scores = list(zip(source_txt, outputs.tolist()[0]))
+            sent_scores = list(zip(input_sentences, outputs.tolist()[0]))
             return sent_scores
 
         sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
@@ -424,7 +507,7 @@ class KobertSummarization(LightningModule):
         selected_sents = []
         selected_ids.sort()
         for i in selected_ids:
-            selected_sents.append(source_txt[i])
+            selected_sents.append(input_sentences[i])
 
         return " ".join(selected_sents).strip()
 
@@ -476,14 +559,15 @@ if __name__ == "__main__":
     )
 
     # trainer.fit(model, datamodule=dm)
-    # trainer.test(model, datamodule=dm)
+    trainer.test(model, datamodule=dm)
 
-    dm.prepare_data()
-    dm.setup(stage="test")
+    # dm.prepare_data()
+    # dm.setup(stage="test")
 
-    idx = np.random.randint(0, 1000)
-    input_sentences = dm.datasets["test"][idx]["sources"]
-    print("Input sentences: ", input_sentences)
-    predictions = model.predict_sentences(input_sentences, top_k=hparams.top_k_sentences)
-    print("Predictions: ", predictions)
-    print("Targets: ", dm.datasets["test"][idx]["targets"])
+    # idx = np.random.randint(0, 100)
+    # input_sentences = dm.datasets["test"][idx]["sources"]
+    # print("Input sentences: ", " ".join(input_sentences))
+    # predictions = model.predict_sentences(input_sentences, top_k=hparams.top_k_sentences)
+    # print("Predictions: ", predictions)
+    # print("Targets: ", dm.datasets["test"][idx]["targets"])
+    # print("Abstractive: ", dm.datasets["test"][idx]["abstractive"])

@@ -45,7 +45,7 @@ if __name__ == "__main__":
             preprocess_data(section, data_type=data_type)
             df = pd.read_pickle(f"../data/ai.hub/{data_type}_{section}_df.pkl")
             print(df.info())
-            df = df[:2000]
+            df = df[:200]
             df.to_pickle(f"../data/ai.hub/{data_type}_{section}_small_df.pkl")
 
     def arrange_article(row):
