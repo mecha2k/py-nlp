@@ -217,9 +217,9 @@ class DataModule(LightningDataModule):
         sent_rep_token_ids[~sent_rep_masks] = 0
 
         sources, targets = None, None
-        if "source" and "target" in batch[0].keys():
-            sources = [item["source"] for item in batch]
-            targets = [item["target"] for item in batch]
+        if "sources" and "targets" in batch[0].keys():
+            sources = [item["sources"] for item in batch]
+            targets = [item["targets"] for item in batch]
 
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
@@ -361,9 +361,8 @@ class KobertSummarization(LightningModule):
         y_true = torch.flatten(labels).cpu().numpy()
         result = acc_and_f1(y_pred, y_true)
 
-        sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
-
         predictions = []
+        sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
         for idx, (source, source_ids, target) in enumerate(zip(sources, sorted_ids, targets)):
             current_prediction = []
             for sent_idx, i in enumerate(source_ids):
