@@ -11,15 +11,20 @@ predictions = [line.strip() for line in open(file_pred, encoding="utf-8")]
 references = [line.strip() for line in open(file_gold, encoding="utf-8")]
 assert len(predictions) == len(references)
 
-rouge = load_metric("rouge")
-metric = rouge.compute(predictions=predictions, references=references)
-print("T_rouge1_f", metric["rouge1"].mid.fmeasure)
-print("T_rouge2_f", metric["rouge2"].mid.fmeasure)
-
-for i, pred in enumerate(predictions):
+preds, refrs = [], []
+for i, (pred, refr) in enumerate(zip(predictions, references)):
     pred = pred.replace("<q>", "\n").replace(".", " ")
+    refr = refr.replace("<q>", "\n").replace(".", " ")
     pred = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", pred)
-    print(f"{i} : ", pred.strip())
+    refr = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", refr)
+    preds.append(pred.strip())
+    refrs.append(refr.strip())
+
+rouge = load_metric("rouge")
+metric = rouge.compute(predictions=preds, references=refrs)
+print("rouge1_f", metric["rouge1"].mid.fmeasure)
+print("rouge2_f", metric["rouge2"].mid.fmeasure)
+print("rougeL_f", metric["rougeL"].mid.fmeasure)
 
 sys_dir = "../data/ai.hub/rouge/gold"
 mod_dir = "../data/ai.hub/rouge/pred"
@@ -36,11 +41,15 @@ for i, (prediction, reference) in enumerate(zip(predictions, references)):
     with open(os.path.join(sys_dir, f"pred.{i}.txt"), "w", encoding="utf-8") as f:
         prediction = prediction.replace("<q>", "\n").replace(".", " ")
         prediction = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", prediction)
-        f.write(prediction)
+        f.write(prediction.strip())
+        print(f"{i} : ", prediction.strip())
     with open(os.path.join(mod_dir, f"gold.{i}.txt"), "w", encoding="utf-8") as f:
         reference = reference.replace("<q>", "\n").replace(".", " ")
         reference = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", reference)
-        f.write(reference)
+        f.write(reference.strip())
+        print(f"{i} : ", reference.strip())
+    if i == 5:
+        break
 
 output = rouge.convert_and_evaluate()
 output_dict = rouge.output_to_dict(output)
