@@ -6,19 +6,21 @@ import transformers
 import spacy
 import warnings
 import logging
+import shutil
 import os
 
 from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, AutoModel, AutoConfig
-from transformers.data.metrics import acc_and_f1
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+from sklearn.metrics import f1_score
 from datasets import load_metric
 from argparse import Namespace
 from collections import OrderedDict
+from pyrouge import Rouge155
 
 
 logger = logging.getLogger(__name__)
@@ -254,7 +256,6 @@ class KobertSummarization(LightningModule):
         self.model = AutoModel.from_pretrained("monologg/kobert")
         self.classifier = SimpleLinearClassifier(self.model.config.hidden_size)
         self.loss_fn = nn.BCEWithLogitsLoss(reduction="none")
-        self.metric = load_metric("squad")
         self.save_gold = os.path.join(self.hparams.data_dir, "save_gold.txt")
         self.save_pred = os.path.join(self.hparams.data_dir, "save_pred.txt")
 
@@ -362,7 +363,7 @@ class KobertSummarization(LightningModule):
         y_pred[y_pred >= 0.5] = 1
         y_pred = torch.flatten(y_pred).cpu().numpy()
         y_true = torch.flatten(labels).cpu().numpy()
-        result = acc_and_f1(y_pred, y_true)
+        result = f1_score(y_true, y_pred)
 
         predictions = []
         sorted_ids = torch.argsort(outputs, dim=1, descending=True).detach().cpu().numpy()
@@ -399,9 +400,7 @@ class KobertSummarization(LightningModule):
 
         return OrderedDict(
             {
-                "acc": torch.tensor(result["acc"]),
-                "f1": torch.tensor(result["f1"]),
-                "acc_and_f1": torch.tensor(result["acc_and_f1"]),
+                "f1_score": torch.tensor(result),
             }
         )
 
@@ -410,8 +409,8 @@ class KobertSummarization(LightningModule):
         references = [line.strip() for line in open(self.save_gold, encoding="utf-8")]
         assert len(predictions) == len(references)
 
-        sys_dir = self.hparams + "/rouge/gold"
-        mod_dir = self.hparams + "/rouge/pred"
+        sys_dir = self.hparams.data_dir + "/rouge/gold"
+        mod_dir = self.hparams.data_dir + "/rouge/pred"
         os.makedirs(sys_dir, exist_ok=True)
         os.makedirs(mod_dir, exist_ok=True)
 
@@ -421,9 +420,9 @@ class KobertSummarization(LightningModule):
         rouge.system_filename_pattern = "pred.(\d+).txt"
         rouge.model_filename_pattern = "gold.(\d+).txt"
 
-        for i, (candidate, reference) in enumerate(zip(candidates, references)):
+        for i, (prediction, reference) in enumerate(zip(predictions, references)):
             with open(os.path.join(sys_dir, f"pred.{i}.txt"), "w", encoding="utf-8") as f:
-                f.write(candidate.replace("<q>", "\n"))
+                f.write(prediction.replace("<q>", "\n"))
             with open(os.path.join(mod_dir, f"gold.{i}.txt"), "w", encoding="utf-8") as f:
                 f.write(reference.replace("<q>", "\n"))
 
@@ -433,18 +432,16 @@ class KobertSummarization(LightningModule):
         if os.path.isdir("../data/ai.hub/rouge"):
             shutil.rmtree("../data/ai.hub/rouge")
 
-        # rouge = load_metric("rouge")
-        # metric = rouge.compute(predictions=predictions, references=references)
-        # self.log("rouge1_f", metric["rouge1"].mid.fmeasure)
-        # self.log("rouge2_f", metric["rouge2"].mid.fmeasure)
-
         self.log("rouge1_f", output_dict["rouge_1_f_score"])
         self.log("rouge2_f", output_dict["rouge_2_f_score"])
         self.log("rougeL_f", output_dict["rouge_l_f_score"])
 
-        self.log("acc", np.stack([x["acc"] for x in outputs]).mean())
-        self.log("f1", np.stack([x["f1"] for x in outputs]).mean())
-        self.log("acc_and_f1", np.stack([x["acc_and_f1"] for x in outputs]).mean())
+        rouge = load_metric("rouge")
+        metric = rouge.compute(predictions=predictions, references=references)
+        self.log("T_rouge1_f", metric["rouge1"].mid.fmeasure)
+        self.log("T_rouge2_f", metric["rouge2"].mid.fmeasure)
+
+        self.log("f1_score", np.stack([x["f1_score"] for x in outputs]).mean())
 
     def configure_optimizers(self):
         no_decay = ["bias", "LayerNorm.weight"]

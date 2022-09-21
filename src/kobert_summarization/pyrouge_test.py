@@ -1,13 +1,25 @@
 import os
+import re
 import shutil
 from pyrouge import Rouge155
+from datasets import load_dataset, load_metric
 
 file_gold = os.path.join("../data/ai.hub", "save_gold.txt")
 file_pred = os.path.join("../data/ai.hub", "save_pred.txt")
 
-candidates = [line.strip() for line in open(file_pred, encoding="utf-8")]
+predictions = [line.strip() for line in open(file_pred, encoding="utf-8")]
 references = [line.strip() for line in open(file_gold, encoding="utf-8")]
-assert len(candidates) == len(references)
+assert len(predictions) == len(references)
+
+rouge = load_metric("rouge")
+metric = rouge.compute(predictions=predictions, references=references)
+print("T_rouge1_f", metric["rouge1"].mid.fmeasure)
+print("T_rouge2_f", metric["rouge2"].mid.fmeasure)
+
+for i, pred in enumerate(predictions):
+    pred = pred.replace("<q>", "\n").replace(".", " ")
+    pred = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", pred)
+    print(f"{i} : ", pred.strip())
 
 sys_dir = "../data/ai.hub/rouge/gold"
 mod_dir = "../data/ai.hub/rouge/pred"
@@ -20,11 +32,15 @@ rouge.model_dir = mod_dir
 rouge.system_filename_pattern = "pred.(\d+).txt"
 rouge.model_filename_pattern = "gold.(\d+).txt"
 
-for i, (candidate, reference) in enumerate(zip(candidates, references)):
+for i, (prediction, reference) in enumerate(zip(predictions, references)):
     with open(os.path.join(sys_dir, f"pred.{i}.txt"), "w", encoding="utf-8") as f:
-        f.write(candidate.replace("<q>", "\n"))
+        prediction = prediction.replace("<q>", "\n").replace(".", " ")
+        prediction = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", prediction)
+        f.write(prediction)
     with open(os.path.join(mod_dir, f"gold.{i}.txt"), "w", encoding="utf-8") as f:
-        f.write(reference.replace("<q>", "\n"))
+        reference = reference.replace("<q>", "\n").replace(".", " ")
+        reference = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", reference)
+        f.write(reference)
 
 output = rouge.convert_and_evaluate()
 output_dict = rouge.output_to_dict(output)
