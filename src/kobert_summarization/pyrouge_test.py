@@ -11,14 +11,17 @@ predictions = [line.strip() for line in open(file_pred, encoding="utf-8")]
 references = [line.strip() for line in open(file_gold, encoding="utf-8")]
 assert len(predictions) == len(references)
 
+
+def clean_text(text):
+    text = text.replace("<q>", "\n").replace(".", " ")
+    text = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", text)
+    return text.strip()
+
+
 preds, refrs = [], []
 for i, (pred, refr) in enumerate(zip(predictions, references)):
-    pred = pred.replace("<q>", "\n").replace(".", " ")
-    refr = refr.replace("<q>", "\n").replace(".", " ")
-    pred = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", pred)
-    refr = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", refr)
-    preds.append(pred.strip())
-    refrs.append(refr.strip())
+    preds.append(clean_text(pred))
+    refrs.append(clean_text(refr))
 
 rouge = load_metric("rouge")
 metric = rouge.compute(predictions=preds, references=refrs)

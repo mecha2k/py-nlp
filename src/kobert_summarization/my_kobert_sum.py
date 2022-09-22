@@ -409,37 +409,46 @@ class KobertSummarization(LightningModule):
         references = [line.strip() for line in open(self.save_gold, encoding="utf-8")]
         assert len(predictions) == len(references)
 
-        sys_dir = self.hparams.data_dir + "/rouge/gold"
-        mod_dir = self.hparams.data_dir + "/rouge/pred"
-        os.makedirs(sys_dir, exist_ok=True)
-        os.makedirs(mod_dir, exist_ok=True)
+        def clean_text(text):
+            text = text.replace("<q>", "\n").replace(".", " ")
+            text = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", text)
+            return text.strip()
 
-        rouge = Rouge155()
-        rouge.system_dir = sys_dir
-        rouge.model_dir = mod_dir
-        rouge.system_filename_pattern = "pred.(\d+).txt"
-        rouge.model_filename_pattern = "gold.(\d+).txt"
+        predictions = [clean_text(text) for text in predictions]
+        references = [clean_text(text) for text in references]
 
-        for i, (prediction, reference) in enumerate(zip(predictions, references)):
-            with open(os.path.join(sys_dir, f"pred.{i}.txt"), "w", encoding="utf-8") as f:
-                f.write(prediction.replace("<q>", "\n"))
-            with open(os.path.join(mod_dir, f"gold.{i}.txt"), "w", encoding="utf-8") as f:
-                f.write(reference.replace("<q>", "\n"))
-
-        output = rouge.convert_and_evaluate()
-        output_dict = rouge.output_to_dict(output)
-
-        if os.path.isdir("../data/ai.hub/rouge"):
-            shutil.rmtree("../data/ai.hub/rouge")
-
-        self.log("rouge1_f", output_dict["rouge_1_f_score"])
-        self.log("rouge2_f", output_dict["rouge_2_f_score"])
-        self.log("rougeL_f", output_dict["rouge_l_f_score"])
+        # sys_dir = self.hparams.data_dir + "/rouge/gold"
+        # mod_dir = self.hparams.data_dir + "/rouge/pred"
+        # os.makedirs(sys_dir, exist_ok=True)
+        # os.makedirs(mod_dir, exist_ok=True)
+        #
+        # rouge = Rouge155()
+        # rouge.system_dir = sys_dir
+        # rouge.model_dir = mod_dir
+        # rouge.system_filename_pattern = "pred.(\d+).txt"
+        # rouge.model_filename_pattern = "gold.(\d+).txt"
+        #
+        # for i, (prediction, reference) in enumerate(zip(predictions, references)):
+        #     with open(os.path.join(sys_dir, f"pred.{i}.txt"), "w", encoding="utf-8") as f:
+        #         f.write(prediction.replace("<q>", "\n"))
+        #     with open(os.path.join(mod_dir, f"gold.{i}.txt"), "w", encoding="utf-8") as f:
+        #         f.write(reference.replace("<q>", "\n"))
+        #
+        # output = rouge.convert_and_evaluate()
+        # output_dict = rouge.output_to_dict(output)
+        #
+        # if os.path.isdir("../data/ai.hub/rouge"):
+        #     shutil.rmtree("../data/ai.hub/rouge")
+        #
+        # self.log("rouge1_f", output_dict["rouge_1_f_score"])
+        # self.log("rouge2_f", output_dict["rouge_2_f_score"])
+        # self.log("rougeL_f", output_dict["rouge_l_f_score"])
 
         rouge = load_metric("rouge")
         metric = rouge.compute(predictions=predictions, references=references)
-        self.log("T_rouge1_f", metric["rouge1"].mid.fmeasure)
-        self.log("T_rouge2_f", metric["rouge2"].mid.fmeasure)
+        self.log("rouge1_f", metric["rouge1"].mid.fmeasure)
+        self.log("rouge2_f", metric["rouge2"].mid.fmeasure)
+        self.log("rougeL_f", metric["rougeL"].mid.fmeasure)
 
         self.log("f1_score", np.stack([x["f1_score"] for x in outputs]).mean())
 
