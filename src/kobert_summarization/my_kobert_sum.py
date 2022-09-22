@@ -8,6 +8,7 @@ import warnings
 import logging
 import shutil
 import os
+import re
 
 from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader
@@ -417,33 +418,6 @@ class KobertSummarization(LightningModule):
         predictions = [clean_text(text) for text in predictions]
         references = [clean_text(text) for text in references]
 
-        # sys_dir = self.hparams.data_dir + "/rouge/gold"
-        # mod_dir = self.hparams.data_dir + "/rouge/pred"
-        # os.makedirs(sys_dir, exist_ok=True)
-        # os.makedirs(mod_dir, exist_ok=True)
-        #
-        # rouge = Rouge155()
-        # rouge.system_dir = sys_dir
-        # rouge.model_dir = mod_dir
-        # rouge.system_filename_pattern = "pred.(\d+).txt"
-        # rouge.model_filename_pattern = "gold.(\d+).txt"
-        #
-        # for i, (prediction, reference) in enumerate(zip(predictions, references)):
-        #     with open(os.path.join(sys_dir, f"pred.{i}.txt"), "w", encoding="utf-8") as f:
-        #         f.write(prediction.replace("<q>", "\n"))
-        #     with open(os.path.join(mod_dir, f"gold.{i}.txt"), "w", encoding="utf-8") as f:
-        #         f.write(reference.replace("<q>", "\n"))
-        #
-        # output = rouge.convert_and_evaluate()
-        # output_dict = rouge.output_to_dict(output)
-        #
-        # if os.path.isdir("../data/ai.hub/rouge"):
-        #     shutil.rmtree("../data/ai.hub/rouge")
-        #
-        # self.log("rouge1_f", output_dict["rouge_1_f_score"])
-        # self.log("rouge2_f", output_dict["rouge_2_f_score"])
-        # self.log("rougeL_f", output_dict["rouge_l_f_score"])
-
         rouge = load_metric("rouge")
         metric = rouge.compute(predictions=predictions, references=references)
         self.log("rouge1_f", metric["rouge1"].mid.fmeasure)
@@ -549,7 +523,7 @@ if __name__ == "__main__":
         load_from_checkpoint=False,
         model_name="monologg/kobert",
         learning_rate=1e-5,
-        batch_size=32,
+        batch_size=16,
         num_epochs=100,
         max_seq_len=512,
         weight_decay=0.01,
@@ -593,10 +567,10 @@ if __name__ == "__main__":
     # dm.prepare_data()
     # dm.setup(stage="test")
 
-    # idx = np.random.randint(0, 100)
-    # input_sentences = dm.datasets["test"][idx]["sources"]
-    # print("Input sentences: ", " ".join(input_sentences))
-    # predictions = model.predict_sentences(input_sentences, top_k=hparams.top_k_sentences)
-    # print("Predictions: ", predictions)
-    # print("Targets: ", dm.datasets["test"][idx]["targets"])
-    # print("Abstractive: ", dm.datasets["test"][idx]["abstractive"])
+    idx = np.random.randint(0, 100)
+    input_sentences = dm.datasets["test"][idx]["sources"]
+    print("Input sentences: ", " ".join(input_sentences))
+    predictions = model.predict_sentences(input_sentences, top_k=hparams.top_k_sentences)
+    print("Predictions: ", predictions)
+    print("Targets: ", dm.datasets["test"][idx]["targets"])
+    print("Abstractive: ", dm.datasets["test"][idx]["abstractive"])
