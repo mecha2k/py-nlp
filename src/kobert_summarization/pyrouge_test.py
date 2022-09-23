@@ -11,10 +11,24 @@ predictions = [line.strip() for line in open(file_pred, encoding="utf-8")]
 references = [line.strip() for line in open(file_gold, encoding="utf-8")]
 assert len(predictions) == len(references)
 
+REMAP = {
+    "-lrb-": "(",
+    "-rrb-": ")",
+    "-lcb-": "{",
+    "-rcb-": "}",
+    "-lsb-": "[",
+    "-rsb-": "]",
+    "``": '"',
+    "''": '"',
+}
+
 
 def clean_text(text):
     text = text.replace("<q>", "\n").replace(".", " ")
     text = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", text)
+    text = re.sub(
+        r"-lrb-|-rrb-|-lcb-|-rcb-|-lsb-|-rsb-|``|''", lambda m: REMAP.get(m.group()), text
+    )
     return text.strip()
 
 
@@ -51,8 +65,7 @@ for i, (prediction, reference) in enumerate(zip(predictions, references)):
         reference = re.sub(r"[^0-9ㄱ-ㅎㅏ-ㅣ가-힣 ]", "", reference)
         f.write(reference.strip())
         print(f"{i} : ", reference.strip())
-    if i == 5:
-        break
+
 
 output = rouge.convert_and_evaluate()
 output_dict = rouge.output_to_dict(output)
