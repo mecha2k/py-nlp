@@ -2,7 +2,7 @@ import os
 import re
 import shutil
 from pyrouge import Rouge155
-from datasets import load_dataset, load_metric
+from datasets import load_metric
 
 file_gold = os.path.join("../data/ai.hub", "save_gold.txt")
 file_pred = os.path.join("../data/ai.hub", "save_pred.txt")
