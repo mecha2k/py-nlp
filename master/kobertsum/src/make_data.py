@@ -16,7 +16,7 @@ PROBLEM = "ext"
 
 ## 사용할 path 정의
 # PROJECT_DIR = '/home/uoneway/Project/PreSumm_ko'
-PROJECT_DIR = ".."
+PROJECT_DIR = "../../../src/data/monologg"
 
 DATA_DIR = f"{PROJECT_DIR}/{PROBLEM}/data"
 RAW_DATA_DIR = DATA_DIR + "/raw"
@@ -197,7 +197,7 @@ def create_json_files(df, data_type="train", target_summary_sent=None, path=""):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-task", default=None, type=str, choices=["df", "train_bert", "test_bert"])
+    parser.add_argument("-task", default="df", type=str, choices=["df", "train_bert", "test_bert"])
     parser.add_argument("-target_summary_sent", default="abs", type=str)
     parser.add_argument("-n_cpus", default="2", type=str)
 

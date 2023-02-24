@@ -530,7 +530,7 @@ if __name__ == "__main__":
         top_k_sentences=2,
     )
 
-    # preprocess_datasets(hparams)
+    preprocess_datasets(hparams)
 
     dm = DataModule(hparams)
 
@@ -561,7 +561,7 @@ if __name__ == "__main__":
         ],
     )
 
-    # trainer.fit(model, datamodule=dm)
+    trainer.fit(model, datamodule=dm)
     trainer.test(model, datamodule=dm)
 
     # dm.prepare_data()

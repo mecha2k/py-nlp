@@ -9,7 +9,7 @@ PROBLEM = "ext"
 
 ## 사용할 path 정의
 # PROJECT_DIR = '/home/uoneway/Project/PreSumm_ko'
-PROJECT_DIR = os.getcwd()
+PROJECT_DIR = "D:/Code/python/master/py-nlp/src/data"
 print(PROJECT_DIR)
 
 DATA_DIR = f"{PROJECT_DIR}/{PROBLEM}/data"
@@ -22,12 +22,13 @@ LOG_PREPO_FILE = LOG_DIR + "/preprocessing.log"
 MODEL_DIR = f"{PROJECT_DIR}/{PROBLEM}/models"
 RESULT_DIR = f"{PROJECT_DIR}/{PROBLEM}/results"
 
+# 1. -task make_data
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-task",
-        default="test",
+        default="make_data",
         type=str,
         choices=["install", "make_data", "train", "valid", "test"],
     )
@@ -53,7 +54,7 @@ if __name__ == "__main__":
 
     # python main.py -task make_data -n_cpus 2
     elif args.task == "make_data":
-        os.chdir(PROJECT_DIR + "/src")
+        os.chdir(PROJECT_DIR + "/monologg")
         os.system("python make_data.py -task df")
         os.system(
             f"python make_data.py -task train_bert -target_summary_sent abs -n_cpus {args.n_cpus}"
@@ -66,7 +67,7 @@ if __name__ == "__main__":
         """
         파라미터별 설명은 trainer_ext 참고
         """
-        os.chdir(PROJECT_DIR + "/src")
+        os.chdir(PROJECT_DIR + "/monologg")
 
         # python train.py -task ext -mode train -bert_data_path BERT_DATA_PATH -ext_dropout 0.1 -model_path MODEL_PATH -lr 2e-3 -visible_gpus 0,1,2 -report_every 50 -save_checkpoint_steps 1000 -batch_size 3000 -train_steps 50000 -accum_count 2 -log_file ../logs/ext_bert_cnndm -use_interval true -warmup_steps 10000 -max_pos 512
         # python train.py  -task abs -mode train -train_from /kaggle/input/absbert-weights/model_step_149000.pt -bert_data_path /kaggle/working/bert_data/news  -dec_dropout 0.2  -model_path /kaggle/working/bertsumextabs -sep_optim true -lr_bert 0.002 -lr_dec 0.02 -save_checkpoint_steps 1000 -batch_size 140 -train_steps 150000 -report_every 100 -accum_count 5 -use_bert_emb true -use_interval true -warmup_steps_bert 1000 -warmup_steps_dec 500 -max_pos 512 -visible_gpus 0  -temp_dir /kaggle/working/temp -log_file /kaggle/working/logs/abs_bert_cnndm
@@ -97,7 +98,7 @@ if __name__ == "__main__":
 
     # python main.py -task valid -model_path 1209_1236
     elif args.task == "valid":
-        os.chdir(PROJECT_DIR + "/src")
+        os.chdir(PROJECT_DIR + "/monologg")
         """
         python train.py -task abs -mode validate -batch_size 3000 -test_batch_size 500 
         -bert_data_path BERT_DATA_PATH -log_file ../logs/val_abs_bert_cnndm -model_path MODEL_PATH -result_path ../logs/abs_bert_cnndm 
@@ -120,7 +121,7 @@ if __name__ == "__main__":
 
     # python main.py -task test -test_from 1209_1236/model_step_7000.pt -visible_gpus 0
     elif args.task == "test":
-        os.chdir(PROJECT_DIR + "/src")
+        os.chdir(PROJECT_DIR + "/monologg")
 
         model_folder, model_name = args.test_from.rsplit("/", 1)
         model_name = model_name.split("_", 1)[1].split(".")[0]
